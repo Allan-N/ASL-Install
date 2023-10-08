@@ -111,9 +111,11 @@ add_update_packages()
 			kernel-devel	\
 			libcurl-devel	\
 			libtool		\
+			libusb-devel	\
 			make		\
 			ncurses-devel	\
 			openssl-devel	\
+			patchutils	\
 			php		\
 
 	${SUDO} yum autoremove
@@ -309,12 +311,64 @@ do_dahdi()
 {
     echo "Build/install DAHDI"								| tee /var/tmp/build-dahdi.txt
 
+    #
+    # we need to add a kernel module signing cert to build DAHDI
+    # on Amazon Linux [2023]
+    #
+    if [ -f /etc/amazon-linux-release ]; then
+	CERTS_DIR="/usr/src/kernels/$(uname -r)/certs"
+	if [ -d "${CERTS_DIR}"				\
+	     -a ! -f "${CERTS_DIR}/signing_key.x509"	\
+	     -a ! -f "${CERTS_DIR}/signing_key.pem" ]; then
+
+	    echo "* add kernel module signing key"					| tee -a /var/tmp/build-dahdi.txt
+
+	    X509_GENKEY=/tmp/x509.genkey
+
+	    cat <<_END_OF_INPUT > "${X509_GENKEY}"
+[ req ]
+default_bits = 4096
+distinguished_name = req_distinguished_name
+prompt = no
+string_mask = utf8only
+x509_extensions = myexts
+
+[ req_distinguished_name ]
+CN = Modules
+
+[ myexts ]
+basicConstraints=critical,CA:FALSE
+keyUsage=digitalSignature
+subjectKeyIdentifier=hash
+authorityKeyIdentifier=keyid
+_END_OF_INPUT
+
+	    ${SUDO} openssl				\
+		req					\
+		-outform DER				\
+		-out	"${CERTS_DIR}/signing_key.x509"	\
+		-new					\
+		-nodes					\
+		-keyout	"${CERTS_DIR}/signing_key.pem"	\
+		-sha512					\
+		-config	"${X509_GENKEY}"		\
+		-x509					\
+		-days 36500				\
+		-utf8					\
+		-batch					\
+		2> /dev/null
+
+	    rm -f "${X509_GENKEY}"
+	fi
+    fi
+
     echo "* autoreconf"									| tee -a /var/tmp/build-dahdi.txt
     (cd ASL-DAHDI/tools;		autoreconf --install --force)			>> /var/tmp/build-dahdi.txt	2>&1
     if [ $? -ne 0 ]; then
 	whiptail --msgbox "ASL-DAHDI/tools autoreconf failed" ${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}
 	exit 1
     fi
+
     echo "* make"									| tee -a /var/tmp/build-dahdi.txt
     make -C ASL-DAHDI MODULES_EXTRA="dahdi_dummy"					>> /var/tmp/build-dahdi.txt	2>&1
     if [ $? -ne 0 ]; then
@@ -323,7 +377,6 @@ do_dahdi()
     fi
 
     echo "* make install"								| tee -a /var/tmp/build-dahdi.txt
-####${SUDO} make -C ASL-DAHDI install				DESTDIR="${DESTDIR}"	>> /var/tmp/build-dahdi.txt	2>&1
     ${SUDO} make -C ASL-DAHDI install MODULES_EXTRA="dahdi_dummy" DESTDIR="${DESTDIR}"	>> /var/tmp/build-dahdi.txt	2>&1
     if [ $? -ne 0 ]; then
 	whiptail --msgbox "ASL-DAHDI install failed" ${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}
@@ -346,6 +399,13 @@ do_dahdi()
     if [ $STATUS -ne 0 ]; then
 	whiptail --msgbox "ASL-DAHDI/tools install-config failed" ${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}
 	exit 1
+    fi
+
+    if [ -f "${DESTDIR}/etc/dahdi/system.conf.sample" -a ! -f "${DESTDIR}/etc/dahdi/system.conf" ]; then
+	${SUDO} install						\
+		-m 644						\
+		"${DESTDIR}/etc/dahdi/system.conf.sample"	\
+		"${DESTDIR}/etc/dahdi/system.conf"
     fi
 
     if [ "$DO_SETUP" = "<--" ]; then
@@ -413,10 +473,6 @@ do_asterisk()
 	${SUDO} sed -i 's/\(^load .* codec_ilbc.so .*\)/no\1/'	${DESTDIR}/etc/asterisk/modules.conf;		\
     fi
 
-    if [ -f ${DESTDIR}/etc/asterisk/modules.conf ]; then	\
-	${SUDO} sed -i 's/\(^load .* res_smdi.so .*\)/no\1/'	${DESTDIR}/etc/asterisk/modules.conf;		\
-    fi
-
     if [ "$DO_SETUP" = "<--" ]; then
 	DO_SETUP=""
     fi
@@ -437,6 +493,20 @@ do_allstar()
     echo "* make install"								| tee -a /var/tmp/build-allstar.txt
     ${SUDO} make -C ASL-Asterisk/allstar install		DESTDIR="${DESTDIR}"	>> /var/tmp/build-allstar.txt	2>&1
 
+    (cd ASL-Asterisk/allstar/debian;					\
+	${SUDO} install							\
+		-m 644							\
+		allstar-helpers.cron.d					\
+		${DESTDIR}/etc/cron.d/allstar-helpers			\
+    )
+
+    (cd ASL-Asterisk/allstar/debian;					\
+	${SUDO} install							\
+		-m 755							\
+		allstar-helpers.cron.daily				\
+		${DESTDIR}/etc/cron.daily/allstar-helpers		\
+    )
+
     DO_ALLSTAR="OK"
     DO_NODES_DIFF="<--"
 }
@@ -449,7 +519,7 @@ do_nodes_diff()
 	${SUDO} install							\
 		-m 755							\
 		update-node-list.sh					\
-		${DESTDIR}/usr/sbin/update-node-list.sh;		\
+		${DESTDIR}/usr/sbin/update-node-list.sh			\
     )
 
     ${SUDO} mkdir -p ${DESTDIR}/lib/systemd/system
@@ -478,7 +548,12 @@ do_supermon()
 	return
     fi
 
-    (cd ASL-Supermon;	tar cf - usr/local/sbin var/www/html) | (cd "${DESTDIR}/" ; ${SUDO} tar xf -)
+    (cd ASL-Supermon;							\
+	tar --create --file - usr/local/sbin var/www/html		\
+    ) |									\
+    (cd "${DESTDIR}/";							\
+	${SUDO} tar --extract --no-same-owner --file -			\
+    )
 
     ${SUDO} sed -i				\
 		-e '/^\[1998]/,/^$/ s/^/;/'	\
@@ -608,6 +683,11 @@ do_allscan()
     # copy the latest/updated source files
     #
     (cd AllScan;	${SUDO} ./_tools/copyToWww.php)
+
+    #
+    # installed files should be root:root
+    #
+    ${SUDO} chown -R 0:0 "${DESTDIR}/var/www/html/allscan"
 
     #
     # and run the install script too!
@@ -1046,7 +1126,7 @@ do_main_menu()
 	    DEFAULT=7
 	elif [ "$DO_ALLSCAN"    = "<--" ]; then
 	    DEFAULT=8
-	elif [ ${NEED_CONFIG_NODE} -gt 0]; then
+	elif [ ${NEED_CONFIG_NODE} -gt 0 ]; then
 	    DO_CONFIG_NODE="<--"
 	    DEFAULT=9
 	elif [ ${NEED_CONFIG_WEB}  -gt 0 ]; then

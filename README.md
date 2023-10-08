@@ -24,7 +24,18 @@ This package has been tested on :
 	* [https://github.com/davidgsd/AllScan.git]() (main repo)
 	* **[https://github.com/Allan-N/AllScan.git]() (fork w/changes)**
 
-### Installation
+### Initial Setup (Amazon Linux 2023)
+
+```
+# install git
+sudo yum update
+sudo yum install -y git
+
+# download this repository
+git clone https://github.com/Allan-N/ASL-Install.git
+```
+
+### Installation (all OS's)
 ```
 ./asl-install.sh
 ```
