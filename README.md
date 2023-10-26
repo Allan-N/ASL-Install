@@ -7,6 +7,7 @@
 This package has been tested on :
 
 * Amazon Linux 2023
+* Debian Linux "bookworm"
 
 ### Packages installed
 
@@ -30,6 +31,18 @@ This package has been tested on :
 # install git
 sudo yum update
 sudo yum install -y git
+
+# download this repository
+git clone https://github.com/Allan-N/ASL-Install.git
+```
+
+### Initial Setup (Debian Linux "bookworm")
+
+```
+# install git
+sudo apt update
+sudo apt upgrade
+sudo apt install -y git
 
 # download this repository
 git clone https://github.com/Allan-N/ASL-Install.git

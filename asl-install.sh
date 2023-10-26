@@ -126,6 +126,7 @@ add_update_packages()
 		apache2			\
 		autoconf		\
 		automake		\
+		build-essential		\
 		cmake			\
 		curl			\
 		git			\
@@ -142,6 +143,7 @@ add_update_packages()
 		libtool			\
 		libusb-1.0-0-dev	\
 		libusb-dev		\
+		linux-headers-`uname -r`\
 		php			\
 		pkg-config		\
 		zip			\
@@ -604,7 +606,7 @@ do_supermon()
 	    fi
         done
 
-	htpasswd -i -c -B "${SUPERMON_PASSWD}" ${SUPERMON_USER} <<_END_OF_INPUT
+	${SUDO} htpasswd -i -c -B "${SUPERMON_PASSWD}" ${SUPERMON_USER} <<_END_OF_INPUT
 ${SUPERMON_PASS}
 _END_OF_INPUT
     fi
@@ -614,7 +616,7 @@ _END_OF_INPUT
     #
     SUPERMON_ACCESS="${DESTDIR}/var/www/html/supermon/.htaccess"
     if [ ! -f "${SUPERMON_ACCESS}" ]; then
-	cat <<_END_OF_INPUT | sudo tee "${SUPERMON_ACCESS}"		> /dev/null
+	cat <<_END_OF_INPUT | ${SUDO} tee "${SUPERMON_ACCESS}"		> /dev/null
 <FilesMatch "\.(htaccess|htpasswd|ini|ini.php|log|sh|inc|bak|save)$">
 Order Allow,Deny
 Deny from all
@@ -642,7 +644,7 @@ _END_OF_INPUT
     #
     SUPERMON_SUDOERS="${DESTDIR}/etc/sudoers.d/supermon"
     if [ ! -f "${SUPERMON_SUDOERS}" ]; then
-	cat <<_END_OF_INPUT | sudo tee "${SUPERMON_SUDOERS}"		> /dev/null
+	cat <<_END_OF_INPUT | ${SUDO} tee "${SUPERMON_SUDOERS}"		> /dev/null
 #
 # Commands used by AllStarLink / Supermon
 #
