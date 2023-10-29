@@ -8,6 +8,7 @@ This package has been tested on :
 
 * Amazon Linux 2023
 * Debian Linux "bookworm"
+* Ubuntu Linux "jammy"
 
 ### Packages installed
 
@@ -31,9 +32,6 @@ This package has been tested on :
 # install git
 sudo yum update
 sudo yum install -y git
-
-# download this repository
-git clone https://github.com/Allan-N/ASL-Install.git
 ```
 
 ### Initial Setup (Debian Linux "bookworm")
@@ -43,13 +41,24 @@ git clone https://github.com/Allan-N/ASL-Install.git
 sudo apt update
 sudo apt upgrade
 sudo apt install -y git
+```
 
-# download this repository
-git clone https://github.com/Allan-N/ASL-Install.git
+### Initial Setup (Ubuntu Linux "jammy")
+
+```
+# install git
+sudo apt update
+sudo apt upgrade
+sudo apt install -y git
 ```
 
 ### Installation (all OS's)
 ```
+# download this repository
+git clone https://github.com/Allan-N/ASL-Install.git
+
+# build and install AllStarLink
+cd ASL-Install
 ./asl-install.sh
 ```
 
