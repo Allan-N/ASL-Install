@@ -145,6 +145,7 @@ add_update_packages()
 		libusb-dev		\
 		linux-headers-`uname -r`\
 		php			\
+		php-sqlite3		\
 		pkg-config		\
 		zip			\
 
