@@ -147,6 +147,7 @@ add_update_packages()
 		php			\
 		php-sqlite3		\
 		pkg-config		\
+		rsync			\
 		zip			\
 
 	${SUDO} apt autoremove
