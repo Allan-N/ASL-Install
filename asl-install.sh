@@ -170,7 +170,7 @@ fetch_update_source()
 	"https://github.com/Allan-N/ASL-Asterisk.git"		\
 	"https://github.com/AllStarLink/ASL-Nodes-Diff.git"	\
 	"https://github.com/Allan-N/ASL-Supermon.git"		\
-	"https://github.com/Allan-N/AllScan.git"		\
+	"https://github.com/davidgsd/AllScan.git]"		\
 
     do
 	r=$(basename ${url})

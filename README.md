@@ -23,8 +23,7 @@ This package has been tested on :
 	* [https://github.com/AllStarLink/ASL-Supermon.git]() (main repo)
 	* **[https://github.com/Allan-N/ASL-Supermon.git]() (my fork w/changes)**
 *	AllScan
-	* [https://github.com/davidgsd/AllScan.git]() (main repo)
-	* **[https://github.com/Allan-N/AllScan.git]() (my fork w/changes)**
+	* **[https://github.com/davidgsd/AllScan.git]()**
 
 ### Initial Setup (Amazon Linux 2023)
 
