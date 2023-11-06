@@ -974,7 +974,7 @@ do_update_header2()
 
     if [ "${CURRENT_WEB_HEADER2}" != "${ANSWER}" ]; then
 	echo "Update web header line 2"
-	${SUDO} sed -i "s/^\(\\\$TITLE2\s*=\s*\).*\(;.*\)/\1\"${ANSWER}\"\2/"	"${SUPERMON_D}/global.inc"
+	${SUDO} sed -i "s|^\(\\\$TITLE2\s*=\s*\).*\(;.*\)|\1\"${ANSWER}\"\2|"	"${SUPERMON_D}/global.inc"
     fi
 }
 
@@ -994,7 +994,7 @@ do_update_header3()
 
     if [ "${CURRENT_WEB_HEADER3}" != "${ANSWER}" ]; then
 	echo "Update web header line 3"
-	${SUDO} sed -i "s/^\(\\\$TITLE3\s*=\s*\).*\(;.*\)/\1\"${ANSWER}\"\2/"	"${SUPERMON_D}/global.inc"
+	${SUDO} sed -i "s|^\(\\\$TITLE3\s*=\s*\).*\(;.*\)|\1\"${ANSWER}\"\2|"	"${SUPERMON_D}/global.inc"
     fi
 }
 
