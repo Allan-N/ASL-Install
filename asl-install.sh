@@ -170,7 +170,7 @@ fetch_update_source()
 	"https://github.com/Allan-N/ASL-Asterisk.git"		\
 	"https://github.com/AllStarLink/ASL-Nodes-Diff.git"	\
 	"https://github.com/Allan-N/ASL-Supermon.git"		\
-	"https://github.com/davidgsd/AllScan.git]"		\
+	"https://github.com/davidgsd/AllScan.git"		\
 
     do
 	r=$(basename ${url})
@@ -265,6 +265,9 @@ add_apache_permissions()
 
     # update [current] user groups and document root permissions
     LOGIN_USER=$(who am i | awk '{print $1}')
+    if [ -z "${LOGIN_USER}" ]; then
+	LOGIN_USER=$(who --short | awk '{print $1}')
+    fi
     if [ -x /usr/sbin/usermod ]; then	
 	${SUDO} usermod				\
 		--append			\
@@ -369,28 +372,36 @@ _END_OF_INPUT
     echo "* autoreconf"									| tee -a /var/tmp/build-dahdi.txt
     (cd ASL-DAHDI/tools;		autoreconf --install --force)			>> /var/tmp/build-dahdi.txt	2>&1
     if [ $? -ne 0 ]; then
-	whiptail --msgbox "ASL-DAHDI/tools autoreconf failed" ${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}
+	MSG="ASL-DAHDI/tools autoreconf failed"
+	MSG="${MSG}\n\nCheck \"/var/tmp/build-dahdi.txt\" for details."
+	whiptail --msgbox "${MSG}" ${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}
 	exit 1
     fi
 
     echo "* make"									| tee -a /var/tmp/build-dahdi.txt
     make -C ASL-DAHDI MODULES_EXTRA="dahdi_dummy"					>> /var/tmp/build-dahdi.txt	2>&1
     if [ $? -ne 0 ]; then
-	whiptail --msgbox "ASL-DAHDI build failed" ${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}
+	MSG="ASL-DAHDI build failed"
+	MSG="${MSG}\n\nCheck \"/var/tmp/build-dahdi.txt\" for details."
+	whiptail --msgbox "${MSG}" ${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}
 	exit 1
     fi
 
     echo "* make install"								| tee -a /var/tmp/build-dahdi.txt
     ${SUDO} make -C ASL-DAHDI install MODULES_EXTRA="dahdi_dummy" DESTDIR="${DESTDIR}"	>> /var/tmp/build-dahdi.txt	2>&1
     if [ $? -ne 0 ]; then
-	whiptail --msgbox "ASL-DAHDI install failed" ${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}
+	MSG="ASL-DAHDI install failed"
+	MSG="${MSG}\n\nCheck \"/var/tmp/build-dahdi.txt\" for details."
+	whiptail --msgbox "${MSG}" ${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}
 	exit 1
     fi
 
     echo "* make config"								| tee -a /var/tmp/build-dahdi.txt
     ${SUDO} make -C ASL-DAHDI config				DESTDIR="${DESTDIR}"	>> /var/tmp/build-dahdi.txt	2>&1
     if [ $? -ne 0 ]; then
-	whiptail --msgbox "ASL-DAHDI install failed" ${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}
+	MSG="ASL-DAHDI config failed"
+	MSG="${MSG}\n\nCheck \"/var/tmp/build-dahdi.txt\" for details."
+	whiptail --msgbox "${MSG}" ${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}
 	exit 1
     fi
 
@@ -401,7 +412,9 @@ _END_OF_INPUT
     cat ${HACK}										>> /var/tmp/build-dahdi.txt
     rm -f ${HACK}
     if [ $STATUS -ne 0 ]; then
-	whiptail --msgbox "ASL-DAHDI/tools install-config failed" ${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}
+	MSG="ASL-DAHDI/tools install-config failed"
+	MSG="${MSG}\n\nCheck \"/var/tmp/build-dahdi.txt\" for details."
+	whiptail --msgbox "${MSG}" ${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}
 	exit 1
     fi
 
@@ -434,42 +447,54 @@ do_asterisk()
     echo "* autoreconf"									| tee -a /var/tmp/build-asterisk.txt
     (cd ASL-Asterisk/asterisk;		autoreconf --install --force)			>> /var/tmp/build-asterisk.txt	2>&1
     if [ $? -ne 0 ]; then
-	whiptail --msgbox "ASL-Asterisk autoreconf failed" ${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}
+	MSG="ASL-Asterisk/asterisk autoreconf failed"
+	MSG="${MSG}\n\nCheck \"/var/tmp/build-asterisk.txt\" for details."
+	whiptail --msgbox "${MSG}" ${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}
 	exit 1
     fi
 
     echo "* configure"									| tee -a /var/tmp/build-asterisk.txt
     (cd ASL-Asterisk/asterisk;		./configure)					>> /var/tmp/build-asterisk.txt	2>&1
     if [ $? -ne 0 ]; then
-	whiptail --msgbox "ASL-Asterisk configure failed" ${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}
+	MSG="ASL-Asterisk/asterisk configure failed"
+	MSG="${MSG}\n\nCheck \"/var/tmp/build-asterisk.txt\" for details."
+	whiptail --msgbox "${MSG}" ${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}
 	exit 1
     fi
 
     echo "* make		(Note: this make take a while)"				| tee -a /var/tmp/build-asterisk.txt
     make -C ASL-Asterisk/asterisk							>> /var/tmp/build-asterisk.txt	2>&1
     if [ $? -ne 0 ]; then
-	whiptail --msgbox "ASL-Asterisk build failed" ${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}
+	MSG="ASL-Asterisk/asterisk build failed"
+	MSG="${MSG}\n\nCheck \"/var/tmp/build-asterisk.txt\" for details."
+	whiptail --msgbox "${MSG}" ${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}
 	exit 1
     fi
 
     echo "* make install"								| tee -a /var/tmp/build-asterisk.txt
     ${SUDO} make -C ASL-Asterisk/asterisk install		DESTDIR="${DESTDIR}"	>> /var/tmp/build-asterisk.txt	2>&1
     if [ $? -ne 0 ]; then
-	whiptail --msgbox "ASL-Asterisk install failed" ${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}
+	MSG="ASL-Asterisk/asterisk install failed"
+	MSG="${MSG}\n\nCheck \"/var/tmp/build-asterisk.txt\" for details."
+	whiptail --msgbox "${MSG}" ${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}
 	exit 1
     fi
 
     echo "* make config"								| tee -a /var/tmp/build-asterisk.txt
     ${SUDO} make -C ASL-Asterisk/asterisk config		DESTDIR="${DESTDIR}"	>> /var/tmp/build-asterisk.txt	2>&1
     if [ $? -ne 0 ]; then
-	whiptail --msgbox "ASL-Asterisk config failed" ${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}
+	MSG="ASL-Asterisk/asterisk config failed"
+	MSG="${MSG}\n\nCheck \"/var/tmp/build-asterisk.txt\" for details."
+	whiptail --msgbox "${MSG}" ${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}
 	exit 1
     fi
 
     echo "* make samples"								| tee -a /var/tmp/build-asterisk.txt
     ${SUDO} make -C ASL-Asterisk/asterisk samples OVERWRITE="n"	DESTDIR="${DESTDIR}"	>> /var/tmp/build-asterisk.txt	2>&1
     if [ $? -ne 0 ]; then
-	whiptail --msgbox "ASL-Asterisk samples failed" ${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}
+	MSG="ASL-Asterisk/asterisk samples failed"
+	MSG="${MSG}\n\nCheck \"/var/tmp/build-asterisk.txt\" for details."
+	whiptail --msgbox "${MSG}" ${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}
 	exit 1
     fi
 

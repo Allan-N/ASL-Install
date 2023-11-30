@@ -84,6 +84,12 @@ timedatectl list-timezones
 sudo timedatectl set-timezone America/New_York
 ```
 
+To check the networking subsystem
+
+```
+networkctl status
+```
+
 ### Configuration options
 
 To turn off the telemetry that announces nodes being connected/disconnected you can make the following changes to the `/etc/asterisk/rpt.conf` file :
@@ -92,6 +98,31 @@ To turn off the telemetry that announces nodes being connected/disconnected you 
 Change "holdofftelem" from "0" to "1"
 Change "telemdefault" from "1" to "2"
 ```
+
+### ... and some of my favorite packages
+
+* apt-file
+	> APT package searching utility
+
+	```
+	sudo apt install -y apt-file
+	```
+
+* avahi-daemon
+	> The Avahi mDNS/DNS-SD daemon (Apple's Zeroconf architecture (also known as "Bonjour")
+
+	```
+	sudo apt install -y avahi-daemon
+	sudo cp /usr/share/doc/avahi-daemon/examples/ssh.service /etc/avahi/services
+	```
+
+* mlocate
+	> find files by name, quickly (e.g. **locate asl-menu**)
+
+	```
+	sudo apt install -y mlocate
+	sudo updatedb
+	```
 
 ## Authors
 
