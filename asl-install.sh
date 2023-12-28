@@ -49,11 +49,11 @@ calc_wt_size()
     #   The number of lines are $LINES
 
     if [ $LINES -lt 22 ]; then
-	echo "Teaminal size must be at least 22 lines."
+	echo "Terminal size must be at least 22 lines."
 	exit
     fi
     if [ $COLUMNS -lt 60 ]; then
-	echo "Teaminal size must be at least 60 columns."
+	echo "Terminal size must be at least 60 columns."
 	exit
     fi
 

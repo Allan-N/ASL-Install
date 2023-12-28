@@ -7,7 +7,7 @@
 This package has been tested on :
 
 * Amazon Linux 2023
-* Debian 12.2 "bookworm"
+* Debian 12.4 "bookworm"
 * Ubuntu 22.04 LTS "jammy"
 
 ### Packages installed
@@ -33,7 +33,7 @@ sudo yum update
 sudo yum install -y git
 ```
 
-### Initial Setup (Debian 12.2 "bookworm")
+### Initial Setup (Debian 12.4 "bookworm")
 
 ```
 # install git
