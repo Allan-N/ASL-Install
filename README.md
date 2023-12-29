@@ -1,6 +1,8 @@
 # ASL-Install
 
-## This project is [currently] focused on the steps needed to build, install, and configure an AllStarLink node running on a virtual machine [VM] in the cloud.
+### This project was [originally] focused on the steps needed to build, install, and configure an AllStarLink node running on a virtual machine [VM] in the cloud.
+
+### That focus has not precluded efforts to manage other deployments (e.g. a DELL Wyse 3040 and Raspberry Pi running Debian).
 
 ## Target Operating System(s)
 
@@ -63,9 +65,30 @@ cd ASL-Install
 ./asl-install.sh
 ```
 
-> The `ASL-install` script should present you with a menu of the steps needed to build, install, and configure a node.  Execute each step, in order, at least one time.
+> The `asl-install.sh` script should present you with a menu of the steps needed to build, install, and configure a node.  Execute each step, in order, at least one time.
 
 > When finished, the script will suggest that you reboot the system.  Unless you know that the changes you made would not affect the running configuration then please consider that to have been a **strong** suggestion.
+
+### Tidbits
+
+Many of the AllStarLink/Asterisk commands (e.g. `asl-menu`, `astres.sh`, etc) are installed in the `/usr/sbin` directory.
+One of the gotchas with [Debian] installs is that the default search PATH does not include this directory.
+You can update your default path by updating the "~/.profile" file in your home directory. As an example, I have updated my file to look like :
+
+```
+...
+# if running bash
+if [ -n "$BASH_VERSION" ]; then
+    # include .bashrc if it exists
+    if [ -f "$HOME/.bashrc" ]; then
+        . "$HOME/.bashrc"
+    fi
+fi
+
+# update PATH (WA3WCO)                                               <--- ADDED
+PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"  <--- ADDED
+...
+```
 
 ### Other useful commands
 
