@@ -502,6 +502,15 @@ do_asterisk()
 	${SUDO} sed -i 's/\(^load .* codec_ilbc.so .*\)/no\1/'	${DESTDIR}/etc/asterisk/modules.conf;		\
     fi
 
+    if [ -f /etc/debian_version ]; then
+	(cd ASL-Asterisk/asterisk/debian;				\
+	    ${SUDO} install						\
+		-m 644							\
+		snd_pcm_oss.conf					\
+		${DESTDIR}/etc/modules-load.d/snd_pcm_oss.conf		\
+	)
+    fi
+
     if [ "$DO_SETUP" = "<--" ]; then
 	DO_SETUP=""
     fi
