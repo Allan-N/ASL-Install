@@ -15,6 +15,8 @@ DO_SUPERMON=""
 DO_ALLSCAN=""
 DO_FINISH=""
 
+SKIP_REBOOT_CHECK=0
+
 MSGBOX_HEIGHT=16
 MSGBOX_WIDTH=60
 
@@ -1113,7 +1115,7 @@ do_configure_web()
 do_finish()
 {
     MSG="Setup is complete. Settings will take effect on next boot."
-    MSG="${MSG}\n\nWould you like to reboot now"
+    MSG="${MSG}\n\nWould you like to reboot now?"
     whiptail					\
 	--title "$title"			\
 	--yesno					\
@@ -1130,10 +1132,57 @@ do_finish()
     fi
 }
 
+check_reboot_needed()
+{
+    if [[ $SKIP_REBOOT_CHECK -ne 0 ]]; then
+	# if we've previously blessed using an [old] kernel
+	return 0
+    fi
+
+    KERNEL_RUNNING="/boot/vmlinuz-$(uname -r)"
+    KERNEL_INSTALL=$(ls -1 /boot/vmlinuz* 2>/dev/null | sort -V | tail -1)
+
+    if [[ -z "${KERNEL_INSTALL}" ]]; then
+	# no "vmlinuz" kernel ???
+	return 0
+    fi
+
+    if [[ "${KERNEL_RUNNING}" != "${KERNEL_INSTALL}" ]]; then
+	#
+	# the running kernel differs from latest installed kernel
+	#
+	MSG="It appears that the OS kernel was recently updated.  This"
+	MSG="${MSG} system should be rebooted before building, installing,"
+	MSG="${MSG} or updating the AllStarLink software."
+	MSG="${MSG}\n\nNote: after the reboot you should re-exec this"
+	MSG="${MSG} command and start again at the first step (Setup)"
+	MSG="${MSG}\n\nWould you like to reboot now?"
+	whiptail				\
+	    --title "$title"			\
+	    --yesno				\
+	    "${MSG}"				\
+	    ${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}
+	ANSWER=$?
+	if [ ${ANSWER} -eq 0 ]; then
+	    sync
+	    sleep 1
+	    ${SUDO} reboot
+	fi
+
+	# if we've opted to keep going
+	SKIP_REBOOT_CHECK=1
+	return 1
+    fi
+
+    return 0
+}
+
 do_main_menu()
 {
     while true; do
 	calc_wt_size
+
+	check_reboot_needed
 
 	read_asl_config " (main menu loop)"
 

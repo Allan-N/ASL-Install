@@ -2,7 +2,7 @@
 
 ### This project was [originally] focused on the steps needed to build, install, and configure an AllStarLink node running on a virtual machine [VM] in the cloud.
 
-### That focus has not precluded efforts to manage other deployments (e.g. a DELL Wyse 3040 and Raspberry Pi running Debian).
+### That focus has not precluded efforts to support other deployments (e.g. a DELL Wyse 3040 and Raspberry Pi running Debian).
 
 ## Target Operating System(s)
 
@@ -43,6 +43,8 @@ sudo apt update
 sudo apt upgrade -y
 sudo apt install -y git
 ```
+
+> Note: if the `sudo apt upgrade` command resulted in the kernel being updated then you should reboot the system before proceeding.
 
 ### Initial Setup (Ubuntu 22.04 LTS "jammy")
 
