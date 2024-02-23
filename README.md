@@ -44,6 +44,8 @@ sudo apt upgrade -y
 sudo apt install -y git
 ```
 
+> Note: if the `sudo apt upgrade` command resulted in the kernel being updated then you should reboot the system before proceeding.
+
 ### Initial Setup (Ubuntu 22.04 LTS "jammy")
 
 ```
