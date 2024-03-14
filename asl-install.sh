@@ -6,13 +6,11 @@
 title="AllStarLink Build and Install"
 
 DO_SETUP="<--"
-DO_CLEAN=""
+DO_PREPARE=""
 DO_DAHDI=""
 DO_ASTERISK=""
 DO_ALLSTAR=""
 DO_NODES_DIFF=""
-DO_SUPERMON=""
-DO_ALLSCAN=""
 DO_FINISH=""
 
 SKIP_REBOOT_CHECK=0
@@ -35,6 +33,21 @@ if [ $EUID != 0 ]; then
     fi
 fi
 
+LOGIN_USER=$(who am i | awk '{print $1}')
+if [ -z "${LOGIN_USER}" ]; then
+    LOGIN_USER=$(who --short | awk '{print $1}')
+fi
+
+INSTALL_EXTRA_PACKAGES=${INSTALL_EXTRA_PACKAGES:-"NO"}
+if [ "$INSTALL_EXTRA_PACKAGES" != "YES" ]; then
+    case "${LOGIN_USER}" in
+	# always install the extra packagse for the following login(s)
+	"wa3wco" )
+	    INSTALL_EXTRA_PACKAGES=YES
+	    ;;
+    esac
+fi
+
 DESTDIR=""
 #DESTDIR="/tmp/asl-install-root"
 if [ "${DESTDIR}" != "" ]; then
@@ -42,6 +55,8 @@ if [ "${DESTDIR}" != "" ]; then
 fi
 
 ASTERISK_D="${DESTDIR}/etc/asterisk"
+ALLMON_D="${DESTDIR}/etc/allmon3"
+ALLSCAN_D="${DESTDIR}/var/www/html/allscan"
 SUPERMON_D="${DESTDIR}/var/www/html/supermon"
 
 calc_wt_size()
@@ -120,6 +135,10 @@ add_update_packages()
 			patchutils	\
 			php		\
 
+	if [ "${INSTALL_EXTRA_PACKAGES}" = "YES" ]; then
+	    ${SUDO} yum install -y avahi-daemon lsof mlocate
+	fi
+
 	${SUDO} yum autoremove
     elif [ -x /usr/bin/apt ]; then
 	${SUDO} apt update
@@ -149,13 +168,81 @@ add_update_packages()
 		php			\
 		php-sqlite3		\
 		pkg-config		\
+		python3-aiohttp		\
+		python3-aiohttp-session	\
+		python3-argon2		\
+		python3-websockets	\
 		rsync			\
 		zip			\
+
+	if [ "${INSTALL_EXTRA_PACKAGES}" = "YES" ]; then
+	    ${SUDO} apt -y install apt-file avahi-daemon lsof mlocate
+	fi
 
 	${SUDO} apt autoremove
     else
 	echo "Unsupported OS"
 	exit 1
+    fi
+
+    if [ "${INSTALL_EXTRA_PACKAGES}" = "YES" ]; then
+	#
+	# apt-file
+	#
+	if [ -x /usr/bin/apt-file ]; then
+	    ${SUDO} apt-file update
+	fi
+
+	#
+	# avahi
+	#
+	SERVICE=ssh.service
+	AVAHI_EXAMPLES=/usr/share/doc/avahi-daemon/examples
+	AVAHI_SERVICES=/etc/avahi/services
+	if [ -f "${AVAHI_EXAMPLES}/${SERVICE}" -a ! -f "${AVAHI_SERVICES}/${SERVICE}" ]; then
+	    ${SUDO} cp "${AVAHI_EXAMPLES}/${SERVICE}" "${AVAHI_SERVICES}/${SERVICE}"
+	fi
+
+	#
+	# [m]locate
+	#
+	if [ -x /usr/bin/updatedb ]; then
+	    ${SUDO} updatedb
+	fi
+
+	#
+	# ex/vi[m] configuration
+	#
+	if [ ! -f ~/.exrc ]; then
+		cat <<_END_OF_INPUT > ~/.exrc
+:set ignorecase
+:set showmatch
+:set ts=8
+_END_OF_INPUT
+	fi
+    fi
+}
+
+add_update_source()
+{
+    url="${1}"
+
+    r=$(basename ${url})
+    d=$(basename ${r} .git)
+    if [ ! -d ${d} ]; then
+	echo "* Fetching \"${d}\""
+	echo ""
+	git clone "${url}"
+	echo ""
+    else
+	echo "* Updating \"${d}\" (preserving any changes)"
+	echo ""
+	(cd "${d}"					\
+	;git stash					\
+	;git pull --rebase				\
+	;git stash pop					\
+	)
+	echo ""
     fi
 }
 
@@ -171,27 +258,9 @@ fetch_update_source()
 	"https://github.com/AllStarLink/ASL-DAHDI.git"		\
 	"https://github.com/Allan-N/ASL-Asterisk.git"		\
 	"https://github.com/AllStarLink/ASL-Nodes-Diff.git"	\
-	"https://github.com/Allan-N/ASL-Supermon.git"		\
-	"https://github.com/davidgsd/AllScan.git"		\
 
     do
-	r=$(basename ${url})
-	d=$(basename ${r} .git)
-	if [ ! -d ${d} ]; then
-		echo "* Fetching \"${d}\""
-		echo ""
-		git clone "${url}"
-		echo ""
-	else
-		echo "* Updating \"${d}\" (preserving any changes)"
-		echo ""
-		(cd "${d}"					\
-		;git stash					\
-		;git pull --rebase				\
-		;git stash pop					\
-		)
-		echo ""
-	fi
+	add_update_source "${url}"
     done
 }
 
@@ -266,10 +335,6 @@ add_apache_permissions()
     fi
 
     # update [current] user groups and document root permissions
-    LOGIN_USER=$(who am i | awk '{print $1}')
-    if [ -z "${LOGIN_USER}" ]; then
-	LOGIN_USER=$(who --short | awk '{print $1}')
-    fi
     if [ -x /usr/sbin/usermod ]; then	
 	${SUDO} usermod				\
 		--append			\
@@ -288,12 +353,37 @@ do_setup()
     add_apache_permissions
 
     DO_SETUP="OK"
-    DO_CLEAN="<--"
+    DO_PREPARE="<--"
 }
 
-do_clean()
+check_setup()
+{
+    if [ -d ASL-DAHDI ] && [ -d ASL-Asterisk ] && [ -d ASL-Nodes-Diff ] ; then
+	return 0
+    fi
+
+    # it looks like we are trying to skip steps so restart UI guidance
+    DO_SETUP="<--"
+    DO_PREPARE=""
+    DO_DAHDI=""
+    DO_ASTERISK=""
+    DO_ALLSTAR=""
+    DO_NODES_DIFF=""
+    DO_FINISH=""
+
+    # and advise (complain) :-)
+    whiptail --msgbox "AllStarLink components are missing.  Please run the \"Setup\" step." ${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}
+    return 1
+}
+
+do_prepare()
 {
     echo "CLEAN the [AllStarLink] packages"
+
+    check_setup
+    if [ $? -ne 0 ]; then
+	return
+    fi
 
     echo "* DAHDI"									| tee /var/tmp/clean-dahdi.txt
     make -C ASL-DAHDI distclean								>> /var/tmp/clean-dahdi.txt	2>&1
@@ -312,13 +402,18 @@ do_clean()
     if [ "$DO_SETUP" = "<--" ]; then
 	DO_SETUP=""
     fi
-    DO_CLEAN="OK"
+    DO_PREPARE="OK"
     DO_DAHDI="<--"
 }
 
 do_dahdi()
 {
     echo "Build/install DAHDI"								| tee /var/tmp/build-dahdi.txt
+
+    check_setup
+    if [ $? -ne 0 ]; then
+	return
+    fi
 
     #
     # we need to add a kernel module signing cert to build DAHDI
@@ -427,11 +522,14 @@ _END_OF_INPUT
 		"${DESTDIR}/etc/dahdi/system.conf"
     fi
 
+    ${SUDO} chown -R asterisk:asterisk	"${DESTDIR}/dev/dahdi"
+    ${SUDO} chmod -R u=rwX,g=rX,o=	"${DESTDIR}/dev/dahdi"
+
     if [ "$DO_SETUP" = "<--" ]; then
 	DO_SETUP=""
     fi
-    if [ "$DO_CLEAN" = "<--" ]; then
-	DO_CLEAN=""
+    if [ "$DO_PREPARE" = "<--" ]; then
+	DO_PREPARE=""
     fi
     DO_DAHDI="OK"
     DO_ASTERISK="<--"
@@ -439,6 +537,11 @@ _END_OF_INPUT
 
 do_asterisk()
 {
+    check_setup
+    if [ $? -ne 0 ]; then
+	return
+    fi
+
     if [ ! -f /usr/include/dahdi/tonezone.h -o ! -f /etc/modprobe.d/dahdi.conf ]; then
 	whiptail --msgbox "DAHDI not built/installed" ${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}
 	exit 1
@@ -513,11 +616,31 @@ do_asterisk()
 	)
     fi
 
+    ${SUDO} chown -R asterisk:asterisk	"${DESTDIR}/var/lib/asterisk"
+    ${SUDO} chmod -R u=rwX,g=rX,o=	"${DESTDIR}/var/lib/asterisk"
+
+    ${SUDO} chown -R asterisk:asterisk	"${DESTDIR}/var/log/asterisk"
+    ${SUDO} chmod -R u=rwX,g=rX,o=	"${DESTDIR}/var/log/asterisk"
+
+    ${SUDO} chown -R asterisk:asterisk	"${DESTDIR}/var/run/asterisk"
+    ${SUDO} chmod -R u=rwX,g=rX,o=	"${DESTDIR}/var/run/asterisk"
+
+    ${SUDO} chown -R asterisk:asterisk	"${DESTDIR}/var/spool/asterisk"
+    ${SUDO} chmod -R u=rwX,g=rX,o=	"${DESTDIR}/var/spool/asterisk"
+
+    ${SUDO} chown -R asterisk:asterisk	"${DESTDIR}/usr/lib/asterisk"
+    ${SUDO} chmod -R u=rwX,g=rX,o=	"${DESTDIR}/usr/lib/asterisk"
+
+    ${SUDO} chown -R root:asterisk	"${DESTDIR}/etc/asterisk"
+    ${SUDO} chmod -R u=rwX,g=rX,o=	"${DESTDIR}/etc/asterisk"
+    ${SUDO} chmod -R g+w		"${DESTDIR}/etc/asterisk/voicemail.conf"
+#   ${SUDO} chmod -R g+w,+t		"${DESTDIR}/etc/asterisk"
+
     if [ "$DO_SETUP" = "<--" ]; then
 	DO_SETUP=""
     fi
-    if [ "$DO_CLEAN" = "<--" ]; then
-	DO_CLEAN=""
+    if [ "$DO_PREPARE" = "<--" ]; then
+	DO_PREPARE=""
     fi
     if [ "$DO_DAHDI" = "<--" ]; then
 	DO_DAHDI="??"
@@ -529,6 +652,11 @@ do_asterisk()
 do_allstar()
 {
     echo "Build/Install AllStar"							| tee /var/tmp/build-allstar.txt
+
+    check_setup
+    if [ $? -ne 0 ]; then
+	return
+    fi
 
     echo "* make install"								| tee -a /var/tmp/build-allstar.txt
     ${SUDO} make -C ASL-Asterisk/allstar install		DESTDIR="${DESTDIR}"	>> /var/tmp/build-allstar.txt	2>&1
@@ -555,6 +683,11 @@ do_nodes_diff()
 {
     echo "Build/install Nodes-Diff"							| tee /var/tmp/build-nodes-diff.txt
 
+    check_setup
+    if [ $? -ne 0 ]; then
+	return
+    fi
+
     (cd ASL-Nodes-Diff;							\
 	${SUDO} install							\
 		-m 755							\
@@ -576,7 +709,131 @@ do_nodes_diff()
     fi
 
     DO_NODES_DIFF="OK"
-    DO_SUPERMON="<--"
+    DO_FINISH="<--"
+}
+
+do_web_user()
+{
+    if [ -n "${WEBUSER_USER}" -a -n "${WEBUSER_PASS}" ]; then
+	# if we already have a [web] user
+	return
+    fi
+
+    WEBUSER_USER=""
+    while [ "${WEBUSER_USER}" = "" ]; do
+	WEBUSER_USER=$(whiptail									\
+			   --title "$title"							\
+			   --inputbox "Enter \"web\" login for Node ${CURRENT_NODE_D}"		\
+			   ${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}					\
+			   3>&1 1>&2 2>&3)
+	if [ $? -ne 0 ]; then
+	    return $?
+	fi
+    done
+
+    WEBUSER_PASS="A"
+    WEBUSER_PASS2="B"
+    while [ "${WEBUSER_PASS}" != "${WEBUSER_PASS2}" ]; do
+	WEBUSER_PASS=$(whiptail									\
+			   --title "$title"							\
+			   --passwordbox "Enter \"web\" password for login ${WEBUSER_USER}"	\
+			   ${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}					\
+			   3>&1 1>&2 2>&3)
+	if [ $? -ne 0 ]; then
+	    return $?
+	fi
+
+	WEBUSER_PASS2=$(whiptail								\
+			    --title "$title"							\
+			    --passwordbox "Verify \"web\" password for login ${WEBUSER_USER}"	\
+			    ${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}					\
+			    3>&1 1>&2 2>&3)
+	if [ $? -ne 0 ]; then
+	    return $?
+	fi
+
+       	if [ "${WEBUSER_PASS}" != "${WEBUSER_PASS2}" ]; then
+	    whiptail --msgbox "Passwords must match" ${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}
+	fi
+    done
+
+    return 0
+}
+
+do_allmon()
+{
+    echo "Build/install Allmon3"
+
+    check_www
+    if [ $? -ne 0 ]; then
+	return
+    fi
+
+    add_update_source "https://github.com/AllStarLink/Allmon3.git"
+
+    #
+    # Update the version #'s
+    #
+    make -C Allmon3 verset
+
+    #
+    # ... and install from the latest/updated source
+    #
+    ${SUDO} make -C Allmon3 install	DESTDIR="${DESTDIR}"	>> /var/tmp/build-allmon3.txt	2>&1
+
+    #
+    # ... and revert the version # updates
+    #
+    (cd Allmon3;				\
+     git restore $(git status			\
+		   | grep -e 'modified:'	\
+		   | sed -e 's/modified://'	\
+		  )				\
+    )
+
+    #
+    # ... and add a link that would have been dropped in by the debian package
+    #
+    ${SUDO} ln -f -s "${DESTDIR}${ALLMON_D}/custom.css" "${DESTDIR}/usr/share/allmon3/css/custom.css"
+
+    #
+    # configure
+    #
+    (cd Allmon3/debian;									\
+	${SUDO} env DPKG_MAINTSCRIPT_NAME=postinst /bin/sh ./postinst configure 0.0.0	\
+    )
+
+    #
+    # ... and add/enable the service
+    #
+    (cd Allmon3/debian;						\
+	${SUDO} install						\
+		-m 644						\
+		allmon3.service					\
+		${DESTDIR}/lib/systemd/system/allmon3.service	\
+    )
+
+    #
+    # if needed, add [web] user
+    #
+    ALLMON_USER=$(${SUDO} grep -v -e "^user|" -e "^allmon3|" "${DESTDIR}${ALLMON_D}/users")
+    if [ -z "${ALLMON_USER}" ]; then
+	do_web_user
+	if [ $? -ne 0 ]; then
+	    return
+	fi
+
+	${SUDO} "${DESTDIR}/usr/bin/allmon3-passwd" ${WEBUSER_USER} <<_END_OF_INPUT
+${WEBUSER_PASS}
+${WEBUSER_PASS}
+_END_OF_INPUT
+    fi
+
+    #
+    # ... and, lastly, start the service
+    #
+    ${SUDO} /bin/systemctl enable allmon3
+    ${SUDO} /bin/systemctl restart allmon3
 }
 
 do_supermon()
@@ -587,6 +844,8 @@ do_supermon()
     if [ $? -ne 0 ]; then
 	return
     fi
+
+    add_update_source "https://github.com/Allan-N/ASL-Supermon.git"
 
     (cd ASL-Supermon;							\
 	tar --create --file - usr/local/sbin var/www/html		\
@@ -602,50 +861,17 @@ do_supermon()
 		"${DESTDIR}/var/www/html/supermon/allmon.ini"
 
     #
-    # if needed, add .htpasswd
+    # if needed, add [web] user
     #
-    SUPERMON_PASSWD="${DESTDIR}/var/www/html/supermon/.htpasswd"
-    if [ ! -f "${SUPERMON_PASSWD}" ]; then
-	SUPERMON_USER=""
-	while [ "${SUPERMON_USER}" = "" ]; do
-	    SUPERMON_USER=$(whiptail							\
-		--title "$title"							\
-		--inputbox "Enter \"Supermon\" login for Node ${CURRENT_NODE_D}"	\
-		${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}					\
-		3>&1 1>&2 2>&3)
-	    if [ $? -ne 0 ]; then
-		return
-	    fi
-	done
+    WEBUSER_PASSWD="${DESTDIR}/var/www/html/supermon/.htpasswd"
+    if [ ! -f "${WEBUSER_PASSWD}" ]; then
+	do_web_user
+	if [ $? -ne 0 ]; then
+	    return
+	fi
 
-	SUPERMON_PASS="A"
-	SUPERMON_PASS2="B"
-        while [ "${SUPERMON_PASS}" != "${SUPERMON_PASS2}" ]; do
-	    SUPERMON_PASS=$(whiptail							\
-		--title "$title"							\
-		--passwordbox "Enter \"Supermon\" password for login ${SUPERMON_USER}"	\
-		${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}					\
-		3>&1 1>&2 2>&3)
-	    if [ $? -ne 0 ]; then
-		return
-	    fi
-
-	    SUPERMON_PASS2=$(whiptail							\
-		--title "$title"							\
-		--passwordbox "Verify \"Supermon\" password for login ${SUPERMON_USER}"	\
-		${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}					\
-		3>&1 1>&2 2>&3)
-	    if [ $? -ne 0 ]; then
-		return
-	    fi
-
-            if [ "${SUPERMON_PASS}" != "${SUPERMON_PASS2}" ]; then
-		whiptail --msgbox "Passwords must match" ${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}
-	    fi
-        done
-
-	${SUDO} htpasswd -i -c -B "${SUPERMON_PASSWD}" ${SUPERMON_USER} <<_END_OF_INPUT
-${SUPERMON_PASS}
+	${SUDO} htpasswd -i -c -B "${WEBUSER_PASSWD}" ${WEBUSER_USER} <<_END_OF_INPUT
+${WEBUSER_PASS}
 _END_OF_INPUT
     fi
 
@@ -705,9 +931,6 @@ User_Alias ADMINS = ${WWW_GROUP}
 ADMINS ALL = NOPASSWD: SUPERMON
 _END_OF_INPUT
     fi
-
-    DO_SUPERMON="OK"
-    DO_ALLSCAN="<--"
 }
 
 do_allscan()
@@ -718,6 +941,8 @@ do_allscan()
     if [ $? -ne 0 ]; then
 	return
     fi
+
+    add_update_source "https://github.com/davidgsd/AllScan.git"
 
     #
     # copy the latest/updated source files
@@ -733,9 +958,6 @@ do_allscan()
     # and run the install script too!
     #
     (cd AllScan;	${SUDO} ./AllScanInstallUpdate.php)
-
-    DO_ALLSCAN="OK"
-    DO_FINISH="<--"
 }
 
 do_configure_node()
@@ -745,7 +967,7 @@ do_configure_node()
     fi
 
     MSG="Set up hotspot/repeater, node number, and other AllStar settings."
-    MSG="${MSG}\n\nWould you like to change AllStar settings?"
+    MSG="${MSG}\n\nWould you like to change the AllStar settings?"
     whiptail					\
 	--title "$title"			\
 	--yesno					\
@@ -765,7 +987,8 @@ read_asl_config()
     NEED_CONFIG_WEB=0
     NEED_NODE_WEB_SYNC=0
 
-    CURRENT_NODE=$(grep -o '^\[[0-9]*\]' "${ASTERISK_D}/rpt.conf" 2>/dev/null			| sed 's/^.//;s/.$//')
+    CURRENT_NODE=$(${SUDO} grep -o '^\[[0-9]*\]' "${ASTERISK_D}/rpt.conf" 2>/dev/null				| \
+		   sed 's/^.//;s/.$//')
     CURRENT_NODE_D="${CURRENT_NODE}"
     case "${CURRENT_NODE}" in
 	"" | "1999" )
@@ -774,7 +997,8 @@ read_asl_config()
 	    ;;
     esac
 
-    CURRENT_CALL=$(grep '^idrecording\s*=\s*' "${ASTERISK_D}/rpt.conf" 2>/dev/null		| sed 's/.*|i\([0-9a-zA-Z/-]*\).*/\1/')
+    CURRENT_CALL=$(${SUDO} grep '^idrecording\s*=\s*' "${ASTERISK_D}/rpt.conf" 2>/dev/null			| \
+		   sed 's/.*|i\([0-9a-zA-Z/-]*\).*/\1/')
     CURRENT_CALL_D="${CURRENT_CALL}"
     case "${CURRENT_CALL}" in
 	"" | "WB6NIL" )
@@ -783,7 +1007,8 @@ read_asl_config()
 	    ;;
     esac
 
-    CURRENT_AMI_SECRET=$(grep '^secret\s*=\s*' "${ASTERISK_D}/manager.conf" 2>/dev/null		| sed 's/^secret\s*=\s*//;s/\s*;.*$//')
+    CURRENT_AMI_SECRET=$(${SUDO} grep '^secret\s*=\s*' "${ASTERISK_D}/manager.conf" 2>/dev/null			| \
+			 sed 's/^secret\s*=\s*//;s/\s*;.*$//')
     CURRENT_AMI_SECRET_D="${CURRENT_AMI_SECRET}"
     case "${CURRENT_AMI_SECRET}" in
 	"" | "llcgi" )
@@ -792,61 +1017,104 @@ read_asl_config()
 	    ;;
     esac
 
-    CURRENT_WEB_CALL=$(grep '^\$CALL\s*=\s*' "${SUPERMON_D}/global.inc" 2>/dev/null		| sed 's/.*"\(.*\)";.*/\1/')
+    if [ -d "${ALLMON_D}" ]; then
+	CURRENT_ALLMON_NODE=$(${SUDO} grep '^\[' "${ALLMON_D}/allmon3.ini" 2>/dev/null				| \
+				head -1										| \
+				sed 's/^\[\(.*\)]$/\1/')
 
-    CURRENT_WEB_NAME=$(grep '^\$NAME\s*=\s*' "${SUPERMON_D}/global.inc" 2>/dev/null		| sed 's/.*"\(.*\)";.*/\1/')
-    CURRENT_WEB_NAME_D="${CURRENT_WEB_NAME}"
-    case "${CURRENT_WEB_NAME}" in
-	"" | "Your NAME" )
-	    CURRENT_WEB_NAME_D="Not configured"
-	    NEED_CONFIG_WEB=$(($NEED_CONFIG_WEB + 1))
-	    ;;
-    esac
+	CURRENT_ALLMON_SECRET=$(${SUDO} sed -n "/^\\[${CURRENT_ALLMON_NODE}]/,/pass/ P" "${ALLMON_D}/allmon3.ini" 2>/dev/null	| \
+				grep "pass"									| \
+				sed -e 's/pass\s*=\s*//')
+    else
+	CURRENT_ALLMON_NODE="${CURRENT_NODE}"
+	CURRENT_ALLMON_SECRET="${CURRENT_AMI_SECRET}"
+    fi
 
-    CURRENT_WEB_LOCATION=$(grep '^\$LOCATION\s*=\s*' "${SUPERMON_D}/global.inc" 2>/dev/null	| sed 's/.*"\(.*\)";.*/\1/')
-    CURRENT_WEB_LOCATION_D="${CURRENT_WEB_LOCATION}"
-    case "${CURRENT_WEB_LOCATION}" in
-	"" | "Edit /var/www/html/supermon/global.inc to change!" )
-	    CURRENT_WEB_LOCATION_D="Not configured"
-	    NEED_CONFIG_WEB=$(($NEED_CONFIG_WEB + 1))
-	    ;;
-    esac
+    if [ -d "${SUPERMON_D}" ]; then
+	CURRENT_SUPERMON_CALL=$(${SUDO} grep '^\$CALL\s*=\s*' "${SUPERMON_D}/global.inc" 2>/dev/null		| \
+				sed 's/.*"\(.*\)";.*/\1/')
 
-    CURRENT_WEB_LOCALZIP=$(grep '^\$LOCALZIP\s*=\s*' "${SUPERMON_D}/global.inc" 2>/dev/null	| sed 's/.*"\(.*\)";.*/\1/')
-    CURRENT_WEB_LOCALZIP_D="${CURRENT_WEB_LOCALZIP}"
-    case "${CURRENT_WEB_LOCALZIP}" in
-	"" | "93301" )
-	    CURRENT_WEB_LOCALZIP_D="Not configured"
-	    NEED_CONFIG_WEB=$(($NEED_CONFIG_WEB + 1))
-	    ;;
-    esac
+	CURRENT_SUPERMON_NAME=$(${SUDO} grep '^\$NAME\s*=\s*' "${SUPERMON_D}/global.inc" 2>/dev/null		| \
+				sed 's/.*"\(.*\)";.*/\1/')
+	CURRENT_SUPERMON_NAME_D="${CURRENT_SUPERMON_NAME}"
+	case "${CURRENT_SUPERMON_NAME}" in
+	    "" | "Your NAME" )
+		CURRENT_SUPERMON_NAME_D="Not configured"
+		NEED_CONFIG_WEB=$(($NEED_CONFIG_WEB + 1))
+		;;
+	esac
 
-    CURRENT_WEB_HEADER2=$(grep '^\$TITLE2\s*=\s*' "${SUPERMON_D}/global.inc" 2>/dev/null	| sed 's/.*"\(.*\)";.*/\1/')
+	CURRENT_SUPERMON_LOCATION=$(${SUDO} grep '^\$LOCATION\s*=\s*' "${SUPERMON_D}/global.inc" 2>/dev/null	| \
+				    sed 's/.*"\(.*\)";.*/\1/')
+	CURRENT_SUPERMON_LOCATION_D="${CURRENT_SUPERMON_LOCATION}"
+	case "${CURRENT_SUPERMON_LOCATION}" in
+	    "" | "Edit /var/www/html/supermon/global.inc to change!" )
+		CURRENT_SUPERMON_LOCATION_D="Not configured"
+		NEED_CONFIG_WEB=$(($NEED_CONFIG_WEB + 1))
+		;;
+	esac
 
-    CURRENT_WEB_HEADER3=$(grep '^\$TITLE3\s*=\s*' "${SUPERMON_D}/global.inc" 2>/dev/null	| sed 's/.*"\(.*\)";.*/\1/')
+	CURRENT_SUPERMON_LOCALZIP=$(${SUDO} grep '^\$LOCALZIP\s*=\s*' "${SUPERMON_D}/global.inc" 2>/dev/null	| \
+				    sed 's/.*"\(.*\)";.*/\1/')
+	CURRENT_SUPERMON_LOCALZIP_D="${CURRENT_SUPERMON_LOCALZIP}"
+	case "${CURRENT_SUPERMON_LOCALZIP}" in
+	    "" | "93301" )
+		CURRENT_SUPERMON_LOCALZIP_D="Not configured"
+		NEED_CONFIG_WEB=$(($NEED_CONFIG_WEB + 1))
+		;;
+	esac
 
-    CURRENT_WEB_NODE=$(grep '^\[' "${SUPERMON_D}/allmon.ini" 2>/dev/null | grep -v 1998 | head -1 | sed 's/^\[\(.*\)]$/\1/')
+	CURRENT_SUPERMON_HEADER2=$(${SUDO} grep '^\$TITLE2\s*=\s*' "${SUPERMON_D}/global.inc" 2>/dev/null	| \
+			      sed 's/.*"\(.*\)";.*/\1/')
 
-    CURRENT_WEB_AMI_SECRET=$(sed -n "/^\\[${CURRENT_WEB_NODE}]/,/passwd/ P" "${SUPERMON_D}/allmon.ini" 2>/dev/null	| \
-			     grep "passwd"										| \
-			     sed -e 's/passwd\s*=\s*//')
+	CURRENT_SUPERMON_HEADER3=$(${SUDO} grep '^\$TITLE3\s*=\s*' "${SUPERMON_D}/global.inc" 2>/dev/null	| \
+			      sed 's/.*"\(.*\)";.*/\1/')
+
+	CURRENT_SUPERMON_NODE=$(${SUDO} grep '^\[' "${SUPERMON_D}/allmon.ini" 2>/dev/null			| \
+				grep -v 1998									| \
+				head -1										| \
+				sed 's/^\[\(.*\)]$/\1/')
+
+	CURRENT_SUPERMON_SECRET=$(${SUDO} sed -n "/^\\[${CURRENT_SUPERMON_NODE}]/,/passwd/ P" "${SUPERMON_D}/allmon.ini" 2>/dev/null	| \
+				  grep "passwd"									| \
+				  sed -e 's/passwd\s*=\s*//')
+    else
+	CURRENT_SUPERMON_CALL="${CURRENT_CALL}"
+	CURRENT_SUPERMON_NAME_D="Not used"
+	CURRENT_SUPERMON_LOCATION_D="Not used"
+	CURRENT_SUPERMON_LOCALZIP_D="Not used"
+	CURRENT_SUPERMON_HEADER2="Not used"
+	CURRENT_SUPERMON_HEADER3="Not used"
+	CURRENT_SUPERMON_NODE="${CURRENT_NODE}"
+	CURRENT_SUPERMON_SECRET="${CURRENT_AMI_SECRET}"
+    fi
 
     SYNC_NODE=0
-    if [ "${CURRENT_NODE}" != "${CURRENT_WEB_NODE}" ]; then
+    if [ "${CURRENT_NODE}" != "${CURRENT_ALLMON_NODE}" ]; then
+	SYNC_NODE=1
+	NEED_NODE_WEB_SYNC=$(($NEED_NODE_WEB_SYNC + 1))
+	NEED_CONFIG_WEB=$(($NEED_CONFIG_WEB + 1))
+    fi
+    if [ "${CURRENT_NODE}" != "${CURRENT_SUPERMON_NODE}" ]; then
 	SYNC_NODE=1
 	NEED_NODE_WEB_SYNC=$(($NEED_NODE_WEB_SYNC + 1))
 	NEED_CONFIG_WEB=$(($NEED_CONFIG_WEB + 1))
     fi
 
     SYNC_CALL=0
-    if [ "${CURRENT_CALL}" != "${CURRENT_WEB_CALL}" ]; then
+    if [ "${CURRENT_CALL}" != "${CURRENT_SUPERMON_CALL}" ]; then
 	SYNC_CALL=1
 	NEED_NODE_WEB_SYNC=$(($NEED_NODE_WEB_SYNC + 1))
 	NEED_CONFIG_WEB=$(($NEED_CONFIG_WEB + 1))
     fi
 
     SYNC_AMI_SECRET=0
-    if [ "${CURRENT_AMI_SECRET}" != "${CURRENT_WEB_AMI_SECRET}" ]; then
+    if [ "${CURRENT_AMI_SECRET}" != "${CURRENT_ALLMON_SECRET}" ]; then
+	SYNC_AMI_SECRET=1
+	NEED_NODE_WEB_SYNC=$(($NEED_NODE_WEB_SYNC + 1))
+	NEED_CONFIG_WEB=$(($NEED_CONFIG_WEB + 1))
+    fi
+    if [ "${CURRENT_AMI_SECRET}" != "${CURRENT_SUPERMON_SECRET}" ]; then
 	SYNC_AMI_SECRET=1
 	NEED_NODE_WEB_SYNC=$(($NEED_NODE_WEB_SYNC + 1))
 	NEED_CONFIG_WEB=$(($NEED_CONFIG_WEB + 1))
@@ -890,22 +1158,55 @@ do_sync_web_with_node()
 	${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}
     ANSWER=$?
     if [ ${ANSWER} -eq 0 ]; then
-	if [ "${CURRENT_NODE}" != "${CURRENT_WEB_NODE}" ]; then
-	    echo "Sync web node"
-	    ${SUDO} sed -i "s/${CURRENT_WEB_NODE}/${CURRENT_NODE}/"			"${SUPERMON_D}/allmon.ini"
+	#
+	# Sync "Allmon3" settings
+	#
+	if [ "${CURRENT_NODE}" != "${CURRENT_ALLMON_NODE}" ]; then
+	    echo "Sync web [allmon3] node"
+	    if [ -z "${CURRENT_ALLMON_NODE}" ]; then
+		cat <<_END_OF_INPUT | ${SUDO} tee -a "${ALLMON_D}/allmon3.ini"	> /dev/null
+
+[${CURRENT_NODE}]
+host=127.0.0.1
+user=admin
+pass=${CURRENT_AMI_SECRET}
+_END_OF_INPUT
+		CURRENT_ALLMON_SECRET="${CURRENT_AMI_SECRET}"
+	    else
+		${SUDO} sed -i "s/${CURRENT_ALLMON_NODE}/${CURRENT_NODE}/"			"${ALLMON_D}/allmon3.ini"
+	    fi
 	fi
 
-	if [ "${CURRENT_CALL}" != "${CURRENT_WEB_CALL}" ]; then
-	    echo "Sync web call"
+	if [ "${CURRENT_AMI_SECRET}" != "${CURRENT_ALLMON_SECRET}" ]; then
+	    echo "Sync web [allmon3] AMI secret"
+	    ${SUDO} ex	"${ALLMON_D}/allmon3.ini"	<<_END_OF_INPUT
+/^\[${CURRENT_NODE}]
+/pass
+s/${CURRENT_ALLMON_SECRET}/${CURRENT_AMI_SECRET}/
+w
+q
+_END_OF_INPUT
+	fi
+
+	#
+	# Sync "Supermon" settings
+	#
+	if [ "${CURRENT_NODE}" != "${CURRENT_SUPERMON_NODE}" ]; then
+	    echo "Sync web [supermon] node"
+	    ${SUDO} sed -i "s/${CURRENT_SUPERMON_NODE}/${CURRENT_NODE}/"			"${SUPERMON_D}/allmon.ini"
+	fi
+
+	if [ "${CURRENT_CALL}" != "${CURRENT_SUPERMON_CALL}" ]; then
+	    echo "Sync web [supermon] call"
 	    ${SUDO} sed -i "s/^\(\\\$CALL\s*=\s*\).*\(;.*\)/\1\"${CURRENT_CALL}\"\2/"	"${SUPERMON_D}/global.inc"
 	fi
 
-	if [ "${CURRENT_AMI_SECRET}" != "${CURRENT_WEB_AMI_SECRET}" ]; then
-	    echo "Sync web AMI secret"
+	if [ "${CURRENT_AMI_SECRET}" != "${CURRENT_SUPERMON_SECRET}" ]; then
+	    echo "Sync web [supermon] AMI secret"
 	    ${SUDO} ex	"${SUPERMON_D}/allmon.ini"	<<_END_OF_INPUT
 /^\[${CURRENT_NODE}]
 /passwd
-s/${CURRENT_WEB_AMI_SECRET}/${CURRENT_AMI_SECRET}/
+s/${CURRENT_SUPERMON_SECRET}/${CURRENT_AMI_SECRET}/
 w
 q
 _END_OF_INPUT
@@ -915,8 +1216,13 @@ _END_OF_INPUT
 
 do_update_web_name()
 {
-    CURRENT="${CURRENT_WEB_NAME}"
-    if [ "${CURRENT_WEB_NAME_D}" = "Not configured" ]; then
+    if [ ! -d "${SUPERMON_D}" ]; then
+	whiptail --msgbox "Supermon not installed" ${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}
+	return
+    fi
+
+    CURRENT="${CURRENT_SUPERMON_NAME}"
+    if [ "${CURRENT_SUPERMON_NAME_D}" = "Not configured" ]; then
 	CURRENT=""
     fi
 
@@ -930,7 +1236,7 @@ do_update_web_name()
 	return
     fi
 
-    if [ "${CURRENT_WEB_NAME}" != "${ANSWER}" ]; then
+    if [ "${CURRENT_SUPERMON_NAME}" != "${ANSWER}" ]; then
 	echo "Update web name"
 	${SUDO} sed -i "s/^\(\\\$NAME\s*=\s*\).*\(;.*\)/\1\"${ANSWER}\"\2/"	"${SUPERMON_D}/global.inc"
     fi
@@ -938,8 +1244,13 @@ do_update_web_name()
 
 do_update_web_location()
 {
-    CURRENT="${CURRENT_WEB_LOCATION}"
-    if [ "${CURRENT_WEB_LOCATION_D}" = "Not configured" ]; then
+    if [ ! -d "${SUPERMON_D}" ]; then
+	whiptail --msgbox "Supermon not installed" ${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}
+	return
+    fi
+
+    CURRENT="${CURRENT_SUPERMON_LOCATION}"
+    if [ "${CURRENT_SUPERMON_LOCATION_D}" = "Not configured" ]; then
 	CURRENT=""
     fi
 
@@ -953,7 +1264,7 @@ do_update_web_location()
 	return
     fi
 
-    if [ "${CURRENT_WEB_LOCATION}" != "${ANSWER}" ]; then
+    if [ "${CURRENT_SUPERMON_LOCATION}" != "${ANSWER}" ]; then
 	echo "Update web location"
 	${SUDO} sed -i "s/^\(\\\$LOCATION\s*=\s*\).*\(;.*\)/\1\"${ANSWER}\"\2/"	"${SUPERMON_D}/global.inc"
     fi
@@ -961,8 +1272,13 @@ do_update_web_location()
 
 do_update_localzip()
 {
-    CURRENT="${CURRENT_WEB_LOCALZIP}"
-    if [ "${CURRENT_WEB_LOCALZIP_D}" = "Not configured" ]; then
+    if [ ! -d "${SUPERMON_D}" ]; then
+	whiptail --msgbox "Supermon not installed" ${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}
+	return
+    fi
+
+    CURRENT="${CURRENT_SUPERMON_LOCALZIP}"
+    if [ "${CURRENT_SUPERMON_LOCALZIP_D}" = "Not configured" ]; then
 	CURRENT=""
     fi
 
@@ -988,7 +1304,7 @@ do_update_localzip()
 	CURRENT="${ANSWER}"
     done
 
-    if [ "${CURRENT_WEB_LOCALZIP}" != "${ANSWER}" ]; then
+    if [ "${CURRENT_SUPERMON_LOCALZIP}" != "${ANSWER}" ]; then
 	echo "Update web zip"
 	${SUDO} sed -i "s/^\(\\\$LOCALZIP\s*=\s*\).*\(;.*\)/\1\"${ANSWER}\"\2/"	"${SUPERMON_D}/global.inc"
     fi
@@ -996,7 +1312,12 @@ do_update_localzip()
 
 do_update_header2()
 {
-    CURRENT="${CURRENT_WEB_HEADER2}"
+    if [ ! -d "${SUPERMON_D}" ]; then
+	whiptail --msgbox "Supermon not installed" ${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}
+	return
+    fi
+
+    CURRENT="${CURRENT_SUPERMON_HEADER2}"
 
     ANSWER=$(whiptail								\
 	    --title "$title"							\
@@ -1008,7 +1329,7 @@ do_update_header2()
 	return
     fi
 
-    if [ "${CURRENT_WEB_HEADER2}" != "${ANSWER}" ]; then
+    if [ "${CURRENT_SUPERMON_HEADER2}" != "${ANSWER}" ]; then
 	echo "Update web header line 2"
 	${SUDO} sed -i "s|^\(\\\$TITLE2\s*=\s*\).*\(;.*\)|\1\"${ANSWER}\"\2|"	"${SUPERMON_D}/global.inc"
     fi
@@ -1016,7 +1337,12 @@ do_update_header2()
 
 do_update_header3()
 {
-    CURRENT="${CURRENT_WEB_HEADER3}"
+    if [ ! -d "${SUPERMON_D}" ]; then
+	whiptail --msgbox "Supermon not installed" ${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}
+	return
+    fi
+
+    CURRENT="${CURRENT_SUPERMON_HEADER3}"
 
     ANSWER=$(whiptail								\
 	    --title "$title"							\
@@ -1028,7 +1354,7 @@ do_update_header3()
 	return
     fi
 
-    if [ "${CURRENT_WEB_HEADER3}" != "${ANSWER}" ]; then
+    if [ "${CURRENT_SUPERMON_HEADER3}" != "${ANSWER}" ]; then
 	echo "Update web header line 3"
 	${SUDO} sed -i "s|^\(\\\$TITLE3\s*=\s*\).*\(;.*\)|\1\"${ANSWER}\"\2|"	"${SUPERMON_D}/global.inc"
     fi
@@ -1036,6 +1362,11 @@ do_update_header3()
 
 do_configure_web()
 {
+    if [ ! -d "${ALLMON_D}" ] && [ ! -d "${ALLSCAN_D}" ] && [ ! -d "${SUPERMON_D}" ] ; then
+	whiptail --msgbox "No web applications have been installed" ${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}
+	return 0
+    fi
+
     calc_wt_size
 
     while true; do
@@ -1055,11 +1386,11 @@ do_configure_web()
 	    DEFAULT=2
 	elif [ "${CURRENT_AMI_SECRET_D}"   = "Not configured" ]; then
 	    DEFAULT=3
-	elif [ "${CURRENT_WEB_NAME_D}"     = "Not configured" ]; then
+	elif [ "${CURRENT_SUPERMON_NAME_D}"     = "Not configured" ]; then
 	    DEFAULT=4
-	elif [ "${CURRENT_WEB_LOCATION_D}" = "Not configured" ]; then
+	elif [ "${CURRENT_SUPERMON_LOCATION_D}" = "Not configured" ]; then
 	    DEFAULT=5
-	elif [ "${CURRENT_WEB_LOCALZIP_D}" = "Not configured" ]; then
+	elif [ "${CURRENT_SUPERMON_LOCALZIP_D}" = "Not configured" ]; then
 	    DEFAULT=6
 	elif [ ${NEED_NODE_WEB_SYNC} -gt 0                    ]; then
 	    DEFAULT=9
@@ -1077,12 +1408,12 @@ do_configure_web()
 		"2" "Node Callsign       : ${CURRENT_CALL_D}"		\
 		"3" "AMI Secret          : ${CURRENT_AMI_SECRET_D}"	\
 		" " ""							\
-		"4" "Your Name           : ${CURRENT_WEB_NAME_D}"	\
-		"5" "Your Location       : ${CURRENT_WEB_LOCATION_D}"	\
-		"6" "Your Zipcode        : ${CURRENT_WEB_LOCALZIP_D}"	\
+		"4" "Your Name           : ${CURRENT_SUPERMON_NAME_D}"	\
+		"5" "Your Location       : ${CURRENT_SUPERMON_LOCATION_D}"	\
+		"6" "Your Zipcode        : ${CURRENT_SUPERMON_LOCALZIP_D}"	\
 		" " ""							\
-		"7" "Supermon Header (2) : ${CURRENT_WEB_HEADER2}"	\
-		"8" "Supermon Header (3) : ${CURRENT_WEB_HEADER3}"	\
+		"7" "Supermon Header (2) : ${CURRENT_SUPERMON_HEADER2}"	\
+		"8" "Supermon Header (3) : ${CURRENT_SUPERMON_HEADER3}"	\
 		" " ""							\
 		"${SYNC_ITEM}" "${SYNC_ACTION}"				\
 		3>&1 1>&2 2>&3)
@@ -1177,6 +1508,89 @@ check_reboot_needed()
     return 0
 }
 
+do_web_apps()
+{
+    while true; do
+	calc_wt_size
+
+	read_asl_config " (web app loop)"
+
+	DO_CONFIG_WEB=""
+	if [ ${NEED_CONFIG_WEB} -gt 0 ]; then
+	    DO_CONFIG_WEB="***"
+	fi
+
+	DEFAULT=0
+	if [ ${NEED_CONFIG_WEB}  -gt 0 ]; then
+	    DO_CONFIG_WEB="<--"
+	    DEFAULT=4
+	fi
+
+	ANSWER=$(whiptail							\
+		--menu "AllStarLink Web Application Menu"			\
+		${WT_HEIGHT}							\
+		${WT_WIDTH}							\
+		${WT_MENU_HEIGHT}						\
+		--ok-button	"Select"					\
+		--cancel-button	"Exit Menu"					\
+		--default-item	${DEFAULT}					\
+		"1" "Build/install Allmon3"					\
+		"2" "Build/install Supermon"					\
+		"3" "Build/install AllScan"					\
+		"4" "Configure web application settings  ${DO_CONFIG_WEB}"	\
+		3>&1 1>&2 2>&3)
+	if [ $? -ne 0 ]; then
+	    return $?
+	fi
+
+	case "${ANSWER}" in
+	    1)	do_allmon		;;
+	    2)	do_supermon		;;
+	    3)	do_allscan		;;
+	    4)	do_configure_web	;;
+	    *)	whiptail --msgbox "\"${ANSWER}\" is an unrecognized selection."		\
+			${MSGBOX_HEIGHT} ${MSGBOX_WIDTH} ;;
+	esac || whiptail --msgbox "There was an error running option \"${ANSWER}\""	\
+			${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}
+    done
+}
+
+do_cleanup()
+{
+
+    MSG="This step will remove the downloaded content used to \"build\" "
+    MSG="${MSG}and \"install\" the AllStarlink components.  Performing "
+    MSG="${MSG}this step is completely safe and will not affect your ASL "
+    MSG="${MSG}node or it's configuration.  Should you want (or need) to "
+    MSG="${MSG}repeat any of the earlier steps then you will need to start "
+    MSG="${MSG}again with the \"Setup\" step."
+    MSG="${MSG}\n\nWould you like to perform the cleanup now?"
+
+    whiptail			\
+	--title "$title"	\
+	--yesno			\
+	"${MSG}"		\
+	${WT_HEIGHT} ${WT_WIDTH}
+    ANSWER=$?
+    if [ "${ANSWER}" != "0" ]; then #answered yes
+	return
+    fi
+
+    for d in			\
+	ASL-Asterisk		\
+	ASL-DAHDI		\
+	ASL-Nodes-Diff		\
+	ASL-Supermon		\
+	AllScan			\
+	Allmon3			\
+
+    do
+	rm -r -f "${d}"
+    done
+
+    return
+}
+
 do_main_menu()
 {
     while true; do
@@ -1199,7 +1613,7 @@ do_main_menu()
 	DEFAULT=0
 	if   [ "$DO_SETUP"      = "<--" ]; then
 	    DEFAULT=1
-	elif [ "$DO_CLEAN"      = "<--" ]; then
+	elif [ "$DO_PREPARE"    = "<--" ]; then
 	    DEFAULT=2
 	elif [ "$DO_DAHDI"      = "<--" ]; then
 	    DEFAULT=3
@@ -1209,16 +1623,12 @@ do_main_menu()
 	    DEFAULT=5
 	elif [ "$DO_NODES_DIFF" = "<--" ]; then
 	    DEFAULT=6
-	elif [ "$DO_SUPERMON"   = "<--" ]; then
-	    DEFAULT=7
-	elif [ "$DO_ALLSCAN"    = "<--" ]; then
-	    DEFAULT=8
 	elif [ ${NEED_CONFIG_NODE} -gt 0 ]; then
 	    DO_CONFIG_NODE="<--"
-	    DEFAULT=9
+	    DEFAULT=8
 	elif [ ${NEED_CONFIG_WEB}  -gt 0 ]; then
 	    DO_CONFIG_WEB="<--"
-	    DEFAULT=10
+	    DEFAULT=9
 	fi
 
 	ANSWER=$(whiptail							\
@@ -1230,15 +1640,15 @@ do_main_menu()
 		--cancel-button	"Exit Menu"					\
 		--default-item	${DEFAULT}					\
 		"1"  "Setup                               ${DO_SETUP}"		\
-		"2"  "Clean before build                  ${DO_CLEAN}"		\
+		"2"  "Prepare                             ${DO_PREPARE}"	\
 		"3"  "Build/install DAHDI                 ${DO_DAHDI}"		\
 		"4"  "Build/install Asterisk              ${DO_ASTERISK}"	\
 		"5"  "Build/install AllStar               ${DO_ALLSTAR}"	\
 		"6"  "Build/install Nodes-Diff            ${DO_NODES_DIFF}"	\
-		"7"  "Build/install Supermon              ${DO_SUPERMON}"	\
-		"8"  "Build/install AllScan               ${DO_ALLSCAN}"	\
-		"9"  "Configure node settings             ${DO_CONFIG_NODE}"	\
-		"10" "Configure web application settings  ${DO_CONFIG_WEB}"	\
+		"7"  "Build/install Web apps (optional)"			\
+		"8"  "Configure node settings             ${DO_CONFIG_NODE}"	\
+		"9"  "Configure web application settings  ${DO_CONFIG_WEB}"	\
+		"10" "Cleanup"							\
 		3>&1 1>&2 2>&3)
 	if [ $? -ne 0 ]; then
 	    do_finish
@@ -1247,15 +1657,15 @@ do_main_menu()
 
 	case "${ANSWER}" in
 	    1)	do_setup		;;
-	    2)	do_clean		;;
+	    2)	do_prepare		;;
 	    3)	do_dahdi		;;
 	    4)	do_asterisk		;;
 	    5)	do_allstar		;;
 	    6)	do_nodes_diff		;;
-	    7)	do_supermon		;;
-	    8)	do_allscan		;;
-	    9)  do_configure_node	;;
-	    10)	do_configure_web	;;
+	    7)	do_web_apps		;;
+	    8)	do_configure_node	;;
+	    9)	do_configure_web	;;
+	    10)	do_cleanup		;;
 	    *)	whiptail --msgbox "\"${ANSWER}\" is an unrecognized selection."		\
 			${MSGBOX_HEIGHT} ${MSGBOX_WIDTH} ;;
 	esac || whiptail --msgbox "There was an error running option \"${ANSWER}\""	\

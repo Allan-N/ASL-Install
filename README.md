@@ -9,22 +9,24 @@
 This package has been tested on :
 
 * Amazon Linux 2023
-* Debian 12.4 "bookworm"
+* Debian 12.5 "bookworm"
 * Ubuntu 22.04 LTS "jammy"
 
 ### Packages installed
 
-* 	ASL-DAHDI
+* ASL-DAHDI
 	* **[https://github.com/AllStarLink/ASL-DAHDI.git]()**
-*  ASL-Asterisk
+* ASL-Asterisk
 	* [https://github.com/AllStarLink/ASL-Asterisk]() (main repo)
 	* **[https://github.com/Allan-N/ASL-Asterisk.git]() (my fork w/changes)**
-*  ASL-Nodes-Diff
+* ASL-Nodes-Diff
 	* **[https://github.com/AllStarLink/ASL-Nodes-Diff.git]()**
-*	ASL-Supermon
+* Allmon3 (optional)
+	* **[https://github.com/AllStarLink/Allmon3.git]()**
+* ASL-Supermon (optional)
 	* [https://github.com/AllStarLink/ASL-Supermon.git]() (main repo)
 	* **[https://github.com/Allan-N/ASL-Supermon.git]() (my fork w/changes)**
-*	AllScan
+* AllScan (optional)
 	* **[https://github.com/davidgsd/AllScan.git]()**
 
 ### Initial Setup (Amazon Linux 2023)
@@ -42,9 +44,8 @@ sudo yum install -y git
 sudo apt update
 sudo apt upgrade -y
 sudo apt install -y git
+sudo apt autoremove -y
 ```
-
-> Note: if the `sudo apt upgrade` command resulted in the kernel being updated then you should reboot the system before proceeding.
 
 ### Initial Setup (Ubuntu 22.04 LTS "jammy")
 
@@ -52,12 +53,15 @@ sudo apt install -y git
 # install git
 sudo apt update
 sudo apt upgrade -y
+sudo apt autoremove -y
 ```
 
-> Note: if the `sudo apt upgrade` command resulted in the kernel being updated then you should reboot the system before proceeding.
+### Pre-installation notes (all OS's)
 
+* If the above pre-installation commands (e.g. `sudo apt upgrade`) resulted in the kernel being updated then you should reboot the system before proceeding.
 
 ### Installation (all OS's)
+
 ```
 # download this repository
 git clone https://github.com/Allan-N/ASL-Install.git
@@ -70,6 +74,10 @@ cd ASL-Install
 > The `asl-install.sh` script should present you with a menu of the steps needed to build, install, and configure a node.  Execute each step, in order, at least one time.
 
 > When finished, the script will suggest that you reboot the system.  Unless you know that the changes you made would not affect the running configuration then please consider that to have been a **strong** suggestion.
+
+#
+
+> Note: to update your local copy of the repository you can use the `git pull` command
 
 ### Tidbits
 

@@ -14,6 +14,10 @@ if [ -f /etc/amazon-linux-release ]; then
     # Check the web server
     apachectl status
 
+    if [ -d /etc/allmon3 ]; then
+	systemctl status allmon3
+    fi
+
 elif [ -f /etc/debian_version ]; then
 
     # Check [ASL] dahdi
@@ -27,6 +31,10 @@ elif [ -f /etc/debian_version ]; then
 
     # Check the web server
     systemctl status apache2
+
+    if [ -d /etc/allmon3 ]; then
+	systemctl status allmon3
+    fi
 
 else
 
