@@ -165,6 +165,7 @@ add_update_packages()
 		libusb-1.0-0-dev	\
 		libusb-dev		\
 		linux-headers-`uname -r`\
+		pandoc			\
 		php			\
 		php-sqlite3		\
 		pkg-config		\
@@ -229,7 +230,17 @@ add_update_source()
 
     r=$(basename ${url})
     d=$(basename ${r} .git)
-    if [ ! -d ${d} ]; then
+
+    if [ -d ${d} ]; then
+	CUR_REPO=$(cd "${d}"; git config --get remote.origin.url)
+	if [ "${CUR_REPO}" != "${url}" ]; then
+	    echo "* Current \"${d}\" git repository url changed, removing \"old\" repo"
+	    echo ""
+	    rm -rf "${d}"
+	fi
+    fi
+
+    if [ ! -d "${d}" ]; then
 	echo "* Fetching \"${d}\""
 	echo ""
 	git clone "${url}"
@@ -255,7 +266,7 @@ fetch_update_source()
     # Add component projects
     #
     for url in							\
-	"https://github.com/AllStarLink/ASL-DAHDI.git"		\
+	"https://github.com/Allan-N/ASL-DAHDI.git"		\
 	"https://github.com/Allan-N/ASL-Asterisk.git"		\
 	"https://github.com/AllStarLink/ASL-Nodes-Diff.git"	\
 
@@ -834,6 +845,8 @@ _END_OF_INPUT
     #
     ${SUDO} /bin/systemctl enable allmon3
     ${SUDO} /bin/systemctl restart allmon3
+
+    DO_ALLMON=""
 }
 
 do_supermon()
@@ -931,6 +944,8 @@ User_Alias ADMINS = ${WWW_GROUP}
 ADMINS ALL = NOPASSWD: SUPERMON
 _END_OF_INPUT
     fi
+
+    DO_SUPERMON=""
 }
 
 do_allscan()
@@ -958,6 +973,8 @@ do_allscan()
     # and run the install script too!
     #
     (cd AllScan;	${SUDO} ./AllScanInstallUpdate.php)
+
+    DO_ALLSCAN=""
 }
 
 do_configure_node()
@@ -1510,6 +1527,21 @@ check_reboot_needed()
 
 do_web_apps()
 {
+    DO_ALLMON="?"
+    if [ -d "${ALLMON_D}" ]; then
+	DO_ALLMON=""
+    fi
+
+    DO_ALLSCAN="?"
+    if [ -d "${ALLSCAN_D}" ]; then
+	DO_ALLSCAN=""
+    fi
+
+    DO_SUPERMON="?"
+    if [ -d "${SUPERMON_D}" ]; then
+	DO_SUPERMON=""
+    fi
+
     while true; do
 	calc_wt_size
 
@@ -1534,9 +1566,9 @@ do_web_apps()
 		--ok-button	"Select"					\
 		--cancel-button	"Exit Menu"					\
 		--default-item	${DEFAULT}					\
-		"1" "Build/install Allmon3"					\
-		"2" "Build/install Supermon"					\
-		"3" "Build/install AllScan"					\
+		"1" "Build/install Allmon3               ${DO_ALLMON}"		\
+		"2" "Build/install Supermon              ${DO_SUPERMON}"	\
+		"3" "Build/install AllScan               ${DO_ALLSCAN}"		\
 		"4" "Configure web application settings  ${DO_CONFIG_WEB}"	\
 		3>&1 1>&2 2>&3)
 	if [ $? -ne 0 ]; then
@@ -1591,6 +1623,35 @@ do_cleanup()
     return
 }
 
+check_web_apps_available()
+{
+    # check if we have all of the ASL components
+    for f in						\
+	"${DESTDIR}/usr/sbin/asterisk"			\
+	"${DESTDIR}/usr/sbin/asl-menu"			\
+	"${DESTDIR}/usr/sbin/update-node-list.sh"	\
+
+    do
+	if [ ! -x "${f}" ]; then
+	    return 0
+	fi
+    done
+
+    # check if we could install any of the [optional] web apps
+    for d in						\
+	"${ALLMON_D}"					\
+	"${ALLSCAN_D}"					\
+	"${SUPERMON_D}"					\
+
+    do
+	if [ ! -d "${d}" ]; then
+	    return 1
+	fi
+    done
+
+    return 0
+}
+
 do_main_menu()
 {
     while true; do
@@ -1608,6 +1669,12 @@ do_main_menu()
 	DO_CONFIG_WEB=""
 	if [ ${NEED_CONFIG_WEB} -gt 0 ]; then
 	    DO_CONFIG_WEB="***"
+	fi
+
+	DO_WEB_APPS=""
+	check_web_apps_available
+	if [ $? -ne 0 ]; then
+	    DO_WEB_APPS="?"
 	fi
 
 	DEFAULT=0
@@ -1645,7 +1712,7 @@ do_main_menu()
 		"4"  "Build/install Asterisk              ${DO_ASTERISK}"	\
 		"5"  "Build/install AllStar               ${DO_ALLSTAR}"	\
 		"6"  "Build/install Nodes-Diff            ${DO_NODES_DIFF}"	\
-		"7"  "Build/install Web apps (optional)"			\
+		"7"  "Build/install Web apps (optional)   ${DO_WEB_APPS}"	\
 		"8"  "Configure node settings             ${DO_CONFIG_NODE}"	\
 		"9"  "Configure web application settings  ${DO_CONFIG_WEB}"	\
 		"10" "Cleanup"							\

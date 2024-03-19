@@ -12,22 +12,30 @@ This package has been tested on :
 * Debian 12.5 "bookworm"
 * Ubuntu 22.04 LTS "jammy"
 
+I have had success using the Raspberry Pi Imager application, selecting :
+
+```
+Raspberry Pi Device : "Raspberry Pi 4"
+Operating System    : "Raspberry Pi OS (other)", "Raspberry Pi OS Lite (64-bit)"
+```
+
 ### Packages installed
 
 * ASL-DAHDI
-	* **[https://github.com/AllStarLink/ASL-DAHDI.git]()**
+	* [https://github.com/AllStarLink/ASL-DAHDI.git](https://github.com/AllStarLink/ASL-DAHDI.git)
+	* **[https://github.com/Allan-N/ASL-DAHDI.git](https://github.com/Allan-N/ASL-DAHDI.git) (my fork w/changes)**
 * ASL-Asterisk
-	* [https://github.com/AllStarLink/ASL-Asterisk]() (main repo)
-	* **[https://github.com/Allan-N/ASL-Asterisk.git]() (my fork w/changes)**
+	* [https://github.com/AllStarLink/ASL-Asterisk](https://github.com/AllStarLink/ASL-Asterisk) (main repo)
+	* **[https://github.com/Allan-N/ASL-Asterisk.git](https://github.com/Allan-N/ASL-Asterisk.git) (my fork w/changes)**
 * ASL-Nodes-Diff
-	* **[https://github.com/AllStarLink/ASL-Nodes-Diff.git]()**
+	* **[https://github.com/AllStarLink/ASL-Nodes-Diff.git](https://github.com/AllStarLink/ASL-Nodes-Diff.git)**
 * Allmon3 (optional)
-	* **[https://github.com/AllStarLink/Allmon3.git]()**
+	* **[https://github.com/AllStarLink/Allmon3.git](https://github.com/AllStarLink/Allmon3.git)**
 * ASL-Supermon (optional)
-	* [https://github.com/AllStarLink/ASL-Supermon.git]() (main repo)
-	* **[https://github.com/Allan-N/ASL-Supermon.git]() (my fork w/changes)**
+	* [https://github.com/AllStarLink/ASL-Supermon.git](https://github.com/AllStarLink/ASL-Supermon.git) (main repo)
+	* **[https://github.com/Allan-N/ASL-Supermon.git](https://github.com/Allan-N/ASL-Supermon.git) (my fork w/changes)**
 * AllScan (optional)
-	* **[https://github.com/davidgsd/AllScan.git]()**
+	* **[https://github.com/davidgsd/AllScan.git](https://github.com/davidgsd/AllScan.git)**
 
 ### Initial Setup (Amazon Linux 2023)
 
@@ -37,7 +45,7 @@ sudo yum update
 sudo yum install -y git
 ```
 
-### Initial Setup (Debian 12.4 "bookworm")
+### Initial Setup (Debian 12.5 "bookworm")
 
 ```
 # install git
