@@ -578,7 +578,7 @@ do_asterisk()
 	exit 1
     fi
 
-    echo "* make		(Note: this make take a while)"				| tee -a /var/tmp/build-asterisk.txt
+    echo "* make		(Note: this may take a while)"				| tee -a /var/tmp/build-asterisk.txt
     make -C ASL-Asterisk/asterisk							>> /var/tmp/build-asterisk.txt	2>&1
     if [ $? -ne 0 ]; then
 	MSG="ASL-Asterisk/asterisk build failed"
