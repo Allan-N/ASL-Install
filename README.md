@@ -61,6 +61,7 @@ sudo apt autoremove -y
 # install git
 sudo apt update
 sudo apt upgrade -y
+sudo apt install -y git
 sudo apt autoremove -y
 ```
 

@@ -99,7 +99,7 @@ do_welcome()
 	"${MSG}"		\
 	${WT_HEIGHT} ${WT_WIDTH}
     ANSWER=$?
-    if [ "${ANSWER}" = "0" ]; then #answered yes
+    if [ "${ANSWER}" = "0" ]; then
 	return
     fi
     exit 0
@@ -477,6 +477,24 @@ _END_OF_INPUT
 	fi
     fi
 
+    echo "* autoupdate (configure.ac)"							| tee -a /var/tmp/build-dahdi.txt
+    (cd ASL-DAHDI/tools;		autoupdate)					>> /var/tmp/build-dahdi.txt	2>&1
+    if [ $? -ne 0 ]; then
+	MSG="ASL-DAHDI/tools autoupdate configure.ac failed"
+	MSG="${MSG}\n\nCheck \"/var/tmp/build-dahdi.txt\" for details."
+	whiptail --msgbox "${MSG}" ${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}
+	exit 1
+    fi
+
+    echo "* autoupdate (acinclude.m4)"							| tee -a /var/tmp/build-dahdi.txt
+    (cd ASL-DAHDI/tools;		autoupdate acinclude.m4)			>> /var/tmp/build-dahdi.txt	2>&1
+    if [ $? -ne 0 ]; then
+	MSG="ASL-DAHDI/tools autoupdate acinclude.m4 failed"
+	MSG="${MSG}\n\nCheck \"/var/tmp/build-dahdi.txt\" for details."
+	whiptail --msgbox "${MSG}" ${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}
+	exit 1
+    fi
+
     echo "* autoreconf"									| tee -a /var/tmp/build-dahdi.txt
     (cd ASL-DAHDI/tools;		autoreconf --install --force)			>> /var/tmp/build-dahdi.txt	2>&1
     if [ $? -ne 0 ]; then
@@ -560,8 +578,44 @@ do_asterisk()
 
     echo "Build/install Asterisk"							| tee /var/tmp/build-asterisk.txt
 
-    echo "* autoreconf"									| tee -a /var/tmp/build-asterisk.txt
-    (cd ASL-Asterisk/asterisk;		autoreconf --install --force)			>> /var/tmp/build-asterisk.txt	2>&1
+    echo "* autoupdate (asterisk/configure.ac)"						| tee -a /var/tmp/build-asterisk.txt
+    (cd ASL-Asterisk/asterisk;			autoupdate)				>> /var/tmp/build-asterisk.txt	2>&1
+    if [ $? -ne 0 ]; then
+	MSG="ASL-Asterisk/asterisk autoreconf failed"
+	MSG="${MSG}\n\nCheck \"/var/tmp/build-asterisk.txt\" for details."
+	whiptail --msgbox "${MSG}" ${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}
+	exit 1
+    fi
+
+    echo "* autoupdate (asterisk/menuselect/configure.ac)"				| tee -a /var/tmp/build-asterisk.txt
+    (cd ASL-Asterisk/asterisk/menuselect;	autoupdate)				>> /var/tmp/build-asterisk.txt	2>&1
+    if [ $? -ne 0 ]; then
+	MSG="ASL-Asterisk/asterisk/menuselect autoreconf configure.ac failed"
+	MSG="${MSG}\n\nCheck \"/var/tmp/build-asterisk.txt\" for details."
+	whiptail --msgbox "${MSG}" ${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}
+	exit 1
+    fi
+
+    echo "* autoupdate (asterisk/menuselect/acinclude.m4)"				| tee -a /var/tmp/build-asterisk.txt
+    (cd ASL-Asterisk/asterisk/menuselect;	autoupdate acinclude.m4)		>> /var/tmp/build-asterisk.txt	2>&1
+    if [ $? -ne 0 ]; then
+	MSG="ASL-Asterisk/asterisk/menuselect autoreconf acinclude.m4 failed"
+	MSG="${MSG}\n\nCheck \"/var/tmp/build-asterisk.txt\" for details."
+	whiptail --msgbox "${MSG}" ${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}
+	exit 1
+    fi
+
+    echo "* autoupdate (asterisk/autoconf/*.m4)"					| tee -a /var/tmp/build-asterisk.txt
+    (cd ASL-Asterisk/asterisk/autoconf;		autoupdate *.m4)			>> /var/tmp/build-asterisk.txt	2>&1
+    if [ $? -ne 0 ]; then
+	MSG="ASL-Asterisk/asterisk/autoconf autoreconf *.m4 failed"
+	MSG="${MSG}\n\nCheck \"/var/tmp/build-asterisk.txt\" for details."
+	whiptail --msgbox "${MSG}" ${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}
+	exit 1
+    fi
+
+    echo "* autoreconf (asterisk)"							| tee -a /var/tmp/build-asterisk.txt
+    (cd ASL-Asterisk/asterisk;			autoreconf --install --force)		>> /var/tmp/build-asterisk.txt	2>&1
     if [ $? -ne 0 ]; then
 	MSG="ASL-Asterisk/asterisk autoreconf failed"
 	MSG="${MSG}\n\nCheck \"/var/tmp/build-asterisk.txt\" for details."
@@ -570,7 +624,7 @@ do_asterisk()
     fi
 
     echo "* configure"									| tee -a /var/tmp/build-asterisk.txt
-    (cd ASL-Asterisk/asterisk;		./configure)					>> /var/tmp/build-asterisk.txt	2>&1
+    (cd ASL-Asterisk/asterisk;			./configure)				>> /var/tmp/build-asterisk.txt	2>&1
     if [ $? -ne 0 ]; then
 	MSG="ASL-Asterisk/asterisk configure failed"
 	MSG="${MSG}\n\nCheck \"/var/tmp/build-asterisk.txt\" for details."
@@ -1604,7 +1658,7 @@ do_cleanup()
 	"${MSG}"		\
 	${WT_HEIGHT} ${WT_WIDTH}
     ANSWER=$?
-    if [ "${ANSWER}" != "0" ]; then #answered yes
+    if [ "${ANSWER}" != "0" ]; then
 	return
     fi
 
