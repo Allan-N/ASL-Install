@@ -13,6 +13,7 @@ DO_ALLSTAR=""
 DO_NODES_DIFF=""
 DO_FINISH=""
 
+MANAGE_KERNEL_HOLD=0
 SKIP_REBOOT_CHECK=0
 
 MSGBOX_HEIGHT=16
@@ -85,6 +86,149 @@ calc_wt_size()
     WT_MENU_HEIGHT=$(($WT_HEIGHT - 8))
 }
 
+check_kernel_can_hold()
+{
+    # check if "dpkg-query" and "apt-mark" are available
+    if ! [[ -x /usr/bin/dpkg-query && -x /usr/bin/apt-mark ]]; then
+	# if kernel updates can not be held
+	return 0
+    fi
+
+    return 1
+}
+
+check_kernel_has_holds()
+{
+    ARCH=$(dpkg --print-architecture)
+
+    HELD=$(dpkg-query							\
+	       --showformat='${db:Status-Abbrev};${binary:Package}\n'	\
+	       --show							\
+	       "linux-image-$ARCH"					\
+	       "linux-headers-$ARCH"					\
+	       "linux-image-*-$ARCH"					\
+	       "linux-headers-*-$ARCH"					\
+	   | grep -e "^hi..*linux.*"					\
+	   | wc -l							\
+	  )
+    return $HELD
+}
+
+#
+# manage_kernel_updates ( hold | unhold | showhold )
+#
+manage_kernel_updates()
+{
+    ACTION=$1
+    ARCH=$(dpkg --print-architecture)
+
+    case $ACTION in
+	"hold" )
+	    # put a "hold" on the newest kernel version
+	    VERS="$(ls -1 /boot/vmlinuz* 2>/dev/null | sort -V | tail -1)"
+	    VERS="${VERS#/boot/vmlinuz-}"
+	    VERS="${VERS%-$ARCH}"
+	    ;;
+	* )
+	    VERS="*"
+	    ;;
+    esac
+
+    dpkg-query							\
+	--showformat='${db:Status-Abbrev};${binary:Package}\n'	\
+	--show							\
+	"linux-image-$ARCH"					\
+	"linux-headers-$ARCH"					\
+	"linux-image-$VERS-$ARCH"				\
+	"linux-headers-$VERS-$ARCH"				\
+    | grep -e linux						\
+    | while read package_info
+    do
+	re=^.i..*$
+	if [[ $package_info =~ $re ]]; then
+	    # if installed
+	    package="${package_info#*;}"
+	    ${SUDO} apt-mark $ACTION $package
+	    RC=$?
+	    if [[ $RC -ne 0 ]]; then
+		echo "\"${SUDO} apt-mark $ACTION $package\" failed: RC=$RC"
+		return $RC
+	    fi
+	fi
+    done
+}
+
+allow_kernel_updates()
+{
+    check_kernel_can_hold
+    if [[ $? -eq 0 ]]; then
+	# if kernel updates can not be held
+	return
+    fi
+
+    check_kernel_has_holds
+    if [[ $? -eq 0 ]]; then
+	# if kernel updates NOT blocked
+	return
+    fi
+
+    if [[ $MANAGE_KERNEL_HOLD -eq 0 ]]; then
+	MSG="Updates to the system kernel appear to have been blocked.  You can"
+	MSG="${MSG} allow the kernel to be updated as long as the DAHDH kernel"
+	MSG="${MSG} module is rebuilt after any changes."
+	MSG="${MSG}\n\nNote: you will be prompted to reboot your system if a"
+	MSG="${MSG} new kernel has been installed."
+	MSG="${MSG}\n\nDo you want to allow the kernel to be updated now?"
+	whiptail				\
+	    --title "$title"			\
+	    --yesno				\
+	    "${MSG}"				\
+	    ${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}
+	ANSWER=$?
+	if [ ${ANSWER} -eq 0 ]; then
+	    MANAGE_KERNEL_HOLD=1
+	fi
+    else
+	ANSWER=0
+    fi
+
+    if [ ${ANSWER} -eq 0 ]; then
+	manage_kernel_updates unhold
+    fi
+}
+
+block_kernel_updates()
+{
+    check_kernel_can_hold
+    if [[ $? -eq 0 ]]; then
+	# if kernel updates can not be held
+	return
+    fi
+
+    if [[ $MANAGE_KERNEL_HOLD -eq 0 ]]; then
+	MSG="Future updates to the OS kernel can result in issues with the"
+	MSG="${MSG} Asterisk software. This is due to a mismatch between the"
+	MSG="${MSG} source code used to build/compile the DAHDI kernel module"
+	MSG="${MSG} and the running version of the kernel."
+	MSG="${MSG}\n\nDo you want to block future updates of the OS kernel?"
+	whiptail				\
+	    --title "$title"			\
+	    --yesno				\
+	    "${MSG}"				\
+	    ${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}
+	ANSWER=$?
+	if [ ${ANSWER} -eq 0 ]; then
+	    MANAGE_KERNEL_HOLD=1
+	fi
+    else
+	ANSWER=0
+    fi
+
+    if [[ $MANAGE_KERNEL_HOLD -ne 0 ]]; then
+	manage_kernel_updates hold
+    fi
+}
+
 do_welcome()
 {
     calc_wt_size
@@ -141,9 +285,13 @@ add_update_packages()
 
 	${SUDO} yum autoremove
     elif [ -x /usr/bin/apt ]; then
+	allow_kernel_updates
+
 	${SUDO} apt update
 
-	${SUDO} apt -y install		\
+	${SUDO} apt upgrade -y
+
+	${SUDO} apt install -y		\
 		apache2			\
 		autoconf		\
 		automake		\
@@ -177,10 +325,12 @@ add_update_packages()
 		zip			\
 
 	if [ "${INSTALL_EXTRA_PACKAGES}" = "YES" ]; then
-	    ${SUDO} apt -y install apt-file avahi-daemon lsof mlocate
+	    ${SUDO} apt install -y apt-file avahi-daemon lsof mlocate
 	fi
 
-	${SUDO} apt autoremove
+	${SUDO} apt autoremove -y
+
+	block_kernel_updates
     else
 	echo "Unsupported OS"
 	exit 1
