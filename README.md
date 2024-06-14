@@ -148,6 +148,7 @@ Change "telemdefault" from "1" to "2"
 
 	```
 	sudo apt install -y apt-file
+	sudo apt-file update
 	```
 
 * avahi-daemon

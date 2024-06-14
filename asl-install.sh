@@ -249,6 +249,23 @@ do_welcome()
     exit 0
 }
 
+check_secure_boot()
+{
+    if [[ ! -x /usr/bin/mokutil ]]; then
+	return
+    fi
+
+    SECURE_BOOT="$(mokutil --sb-state)"
+    if [[ "$SECURE_BOOT" != "SecureBoot enabled" ]]; then
+	return
+    fi
+
+    whiptail					\
+	--msgbox "Your system appears to have \"Secure Boot\" enabled.  You will need to change our BIOS settings to disable \"Secure Boot\""	\
+	${MSGBOX_HEIGHT} ${MSGBOX_WIDTH}
+    exit 1
+}
+
 add_update_packages()
 {
     echo ""
@@ -508,6 +525,7 @@ add_apache_permissions()
 
 do_setup()
 {
+    check_secure_boot
     add_update_packages
     fetch_update_source
     add_asterisk_user
