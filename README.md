@@ -1,6 +1,16 @@
+# !!! NEWS FLASH !!!
+
+### AllStarLink announced ASL3!!! ASL3 is built to run on Asterisk 20 (the current long term support release), the latest operating systems (Debian 12), and modern hardware.
+
+### For more information about ASL3, check out the [ASL3 Manual](https://allstarlink.github.io).
+
+
 # ASL-Install
 
+
 ### This project was [originally] focused on the steps needed to build, install, and configure an AllStarLink node running on a virtual machine [VM] in the cloud.
+
+### This project installed nodes using the **ASL2** software.  This software is now out-of-date and you should plan to migrate your nodes to [**ASL3**](https://allstarlink.github.io) !!!
 
 ### That focus has not precluded efforts to support other deployments (e.g. a DELL Wyse 3040 and Raspberry Pi running Debian).
 

@@ -297,7 +297,7 @@ add_update_packages()
 			php		\
 
 	if [ "${INSTALL_EXTRA_PACKAGES}" = "YES" ]; then
-	    ${SUDO} yum install -y avahi-daemon lsof mlocate
+	    ${SUDO} yum install -y avahi-daemon lsof plocate
 	fi
 
 	${SUDO} yum autoremove
@@ -342,7 +342,7 @@ add_update_packages()
 		zip			\
 
 	if [ "${INSTALL_EXTRA_PACKAGES}" = "YES" ]; then
-	    ${SUDO} apt install -y apt-file avahi-daemon lsof mlocate
+	    ${SUDO} apt install -y apt-file avahi-daemon lsof plocate
 	fi
 
 	${SUDO} apt autoremove -y
@@ -372,9 +372,11 @@ add_update_packages()
 	fi
 
 	#
-	# [m]locate
+	# [p]locate
 	#
-	if [ -x /usr/bin/updatedb ]; then
+	if [ -f /lib/systemd/system/plocate-updatedb.service ]; then
+	    ${SUDO} systemctl start plocate-updatedb.service
+	elif [ -x /usr/bin/updatedb ]; then
 	    ${SUDO} updatedb
 	fi
 
